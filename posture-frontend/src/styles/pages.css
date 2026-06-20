@@ -1,0 +1,213 @@
+/* Pages CSS - Additional page-specific styles */
+
+/* This file is imported by individual page components for any additional styling */
+
+/* Home Page Additional Styles */
+.home-page {
+  animation: fadeIn 0.3s ease-in;
+}
+
+/* Study Page Additional Styles */
+.study-page h2 {
+  font-size: 24px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* Stats Page Additional Styles */
+.stats-page {
+  animation: fadeIn 0.3s ease-in;
+}
+
+/* Stretches Page Additional Styles */
+.stretches-page h2 {
+  font-size: 24px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Social Page Additional Styles */
+.social-page {
+  animation: fadeIn 0.3s ease-in;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scrollbar styling */
+.app-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.app-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print styles */
+@media print {
+  .bottom-nav {
+    display: none;
+  }
+  
+  .app-content {
+    padding-bottom: 0;
+  }
+}
+
+/* Home page stat grid and level card */
+.home-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.stat-item {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+.stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.stat-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+.level-card {
+  display: flex;
+  gap: 12px;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  box-shadow: var(--shadow);
+}
+
+.level-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.level-badge {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.level-name {
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.xp-display {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.level-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.xp-bar {
+  width: 260px;
+  height: 10px;
+  background: var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.xp-fill {
+  height: 100%;
+  background: var(--text);
+  transition: width 0.3s ease;
+}
+
+.xp-meta, .xp-consistent {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .xp-bar { width: 160px; }
+}
+
+/* Compact stretches for small phones */
+@media (max-width: 420px) {
+  .stretch-summary {
+    padding: 10px;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .stretch-info {
+    flex: 1 1 auto;
+  }
+
+  .stretch-name {
+    font-size: 13px;
+  }
+
+  /* hide long descriptions to save space on phones */
+  .stretch-description {
+    display: none;
+  }
+
+  .stretch-duration {
+    min-width: 56px;
+    flex: 0 0 56px;
+    text-align: right;
+  }
+
+  .stretch-details {
+    padding: 0 10px 12px;
+  }
+}
