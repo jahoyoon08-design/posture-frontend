@@ -105,6 +105,28 @@ html, body, #root {
   fill: currentColor;
 }
 
+/* react-icons components use svg elements with class names; ensure sizing and color inherit */
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  color: currentColor;
+}
+
+/* Monochrome filled icons: inactive grey, active black */
+.bottom-nav .nav-item {
+  color: var(--text-light);
+}
+.bottom-nav .nav-item .nav-icon {
+  fill: currentColor;
+}
+.bottom-nav .nav-item.active {
+  color: var(--text);
+}
+.bottom-nav .nav-item:not(.active) .nav-icon {
+  opacity: 0.85;
+}
+
 .bottom-nav .nav-item:not(.active) svg {
   color: var(--text-light);
   opacity: 0.7;

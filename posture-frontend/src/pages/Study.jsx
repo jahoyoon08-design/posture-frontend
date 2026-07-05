@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import '../styles/pages.css'
 
 export default function Study() {
@@ -69,6 +69,124 @@ export default function Study() {
   const getStatusColor = () => {
     return sessionType === 'work' ? 'var(--text)' : 'var(--text-light)'
   }
+
+  // Refs and state for posture tracking
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const cameraRef = useRef(null)
+  const poseRef = useRef(null)
+  const [detectedPose, setDetectedPose] = useState(null)
+  const [tracking, setTracking] = useState(false)
+
+  const sendLandmarks = async (landmarks) => {
+    try {
+      const res = await fetch('/api/pose/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ landmarks })
+      })
+      if (res.ok) {
+        const json = await res.json()
+        if (json && json.pose) setDetectedPose(json.pose)
+      }
+    } catch (err) {
+      // backend may not be available; ignore silently
+      // console.debug('predict error', err)
+    }
+  }
+
+  const onResults = (results) => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!canvas || !video) return
+    const ctx = canvas.getContext('2d')
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+
+    // draw the camera image
+    ctx.save()
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (results.image) ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height)
+
+    // draw pose landmarks
+    const lm = results.poseLandmarks || []
+    ctx.fillStyle = 'rgba(0,0,0,0.9)'
+    for (let i = 0; i < lm.length; i++) {
+      const x = lm[i].x * canvas.width
+      const y = lm[i].y * canvas.height
+      ctx.beginPath()
+      ctx.arc(x, y, 4, 0, 2 * Math.PI)
+      ctx.fill()
+    }
+    ctx.restore()
+
+    if (lm.length) {
+      const simplified = lm.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility }))
+      sendLandmarks(simplified)
+    }
+  }
+
+  const startCamera = async () => {
+    if (tracking) return
+    try {
+      const { Pose } = await import('@mediapipe/pose')
+
+      const pose = new Pose.Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+      })
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      })
+      pose.onResults(onResults)
+      poseRef.current = pose
+
+      // Use native getUserMedia and a RAF loop instead of @mediapipe/camera_utils
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+      const video = videoRef.current
+      video.srcObject = stream
+      await video.play()
+
+      let stopped = false
+      cameraRef.current = { stream, stop: () => { stopped = true; stream.getTracks().forEach(t => t.stop()) } }
+
+      const frameLoop = async () => {
+        if (stopped || !poseRef.current) return
+        try {
+          await poseRef.current.send({ image: video })
+        } catch (e) {
+          // ignore per-frame errors
+        }
+        requestAnimationFrame(frameLoop)
+      }
+      requestAnimationFrame(frameLoop)
+      setTracking(true)
+    } catch (err) {
+      console.error('Failed to start camera', err)
+    }
+  }
+
+  const stopCamera = () => {
+    try {
+      if (cameraRef.current && cameraRef.current.stop) cameraRef.current.stop()
+      if (cameraRef.current && cameraRef.current.stream) cameraRef.current.stream.getTracks().forEach(t => t.stop())
+    } catch (e) {}
+    cameraRef.current = null
+    if (poseRef.current && poseRef.current.close) poseRef.current.close()
+    poseRef.current = null
+    setTracking(false)
+    setDetectedPose(null)
+    if (videoRef.current) {
+      try { videoRef.current.pause(); videoRef.current.srcObject = null } catch (e) {}
+    }
+  }
+
+  useEffect(() => {
+    return () => stopCamera()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="page study-page">
@@ -194,14 +312,18 @@ export default function Study() {
           </button>
         </div>
 
-        <div className="camera-box" title="Camera (coming soon)">
-          <div className="camera-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 7l-3 0-2-3H8L6 7H3v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7z"></path>
-              <circle cx="12" cy="13" r="3"></circle>
-            </svg>
+        <div className="camera-box" title="Posture tracking">
+          <div className="camera-controls">
+            <button id="start-camera" className="control-btn" onClick={() => startCamera()}>Start Camera</button>
+            <button id="stop-camera" className="control-btn reset" onClick={() => stopCamera()}>Stop Camera</button>
+            <div className="pose-result">Detected pose: <strong>{detectedPose || '—'}</strong></div>
           </div>
-          <div className="camera-text">Camera off</div>
+
+          <div className="camera-area">
+            <video ref={videoRef} className="camera-video" playsInline></video>
+            <canvas ref={canvasRef} className="camera-canvas"></canvas>
+          </div>
+          <div className="camera-text">Posture tracker (using MediaPipe)</div>
         </div>
 
         <div className="sessions-count">
