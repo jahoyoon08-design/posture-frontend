@@ -7,6 +7,10 @@
   animation: fadeIn 0.3s ease-in;
 }
 
+.welcome-card .ghost-btn {
+  white-space: nowrap;
+}
+
 /* Study Page Additional Styles */
 .study-page h2 {
   font-size: 24px;
@@ -29,6 +33,10 @@
 /* Social Page Additional Styles */
 .social-page {
   animation: fadeIn 0.3s ease-in;
+}
+
+.friend-search-card input {
+  padding: 12px 14px;
 }
 
 /* Animations */
@@ -164,7 +172,7 @@
 
 .xp-fill {
   height: 100%;
-  background: var(--text);
+  background: var(--primary);
   transition: width 0.3s ease;
 }
 

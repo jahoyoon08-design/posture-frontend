@@ -2,7 +2,7 @@ import { useState } from 'react'
 import '../styles/pages.css'
 
 export default function Stretches() {
-  const [openedStretch, setOpenedStretch] = useState(null)
+  const [openedStretch, setOpenedStretch] = useState(1)
 
   const stretches = [
     {
@@ -11,6 +11,7 @@ export default function Stretches() {
       recommended: true,
       description: 'Gentle twist to mobilize the spine',
       duration: '2 minutes',
+      image: '/assets/seated-spinal-twist.png',
       details: [
         'Maintain a long spine and breathe deeply.',
         'Hold for 30 seconds on each side.',
@@ -23,6 +24,7 @@ export default function Stretches() {
       name: 'Seated Forward Bend',
       description: 'Stretch your back and hamstrings',
       duration: '2 minutes',
+      image: '/assets/seated-forward-bend.png',
       details: [
         'Reach towards your toes while keeping the spine straight.',
         'Relax your neck and breathe into the stretch.',
@@ -35,6 +37,7 @@ export default function Stretches() {
       name: 'Neck Rolls',
       description: 'Release tension from your neck',
       duration: '1 minute',
+      image: '/assets/neck-rolls.png',
       details: [
         'Move slowly and avoid sudden jerks.',
         'Keep your shoulders down while rolling.',
@@ -46,6 +49,7 @@ export default function Stretches() {
       name: 'Shoulder Shrugs',
       description: 'Loosen up your shoulder muscles',
       duration: '1 minute',
+      image: '/assets/shoulder-shrugs.png',
       details: [
         'Lift your shoulders towards your ears.',
         'Hold briefly and release down.',
@@ -57,6 +61,7 @@ export default function Stretches() {
       name: 'Wrist Circles',
       description: 'Improve wrist flexibility',
       duration: '1 minute',
+      image: '/assets/wrist-circles.png',
       details: [
         'Rotate wrists clockwise and counter-clockwise.',
         'Keep movements smooth and gentle.',
@@ -68,6 +73,7 @@ export default function Stretches() {
       name: 'Eye Exercises',
       description: 'Reduce eye strain from screen time',
       duration: '2 minutes',
+      image: '/assets/eye-exercises.png',
       details: [
         'Look up and down slowly.',
         'Then shift gaze left and right.',
@@ -82,7 +88,6 @@ export default function Stretches() {
 
   const formatDuration = (d) => {
     if (!d) return ''
-    // convert "2 minutes" or "1 minute" to "2m", "1m"
     return d.replace(/\s*minutes?$/i, 'm')
   }
 
@@ -93,10 +98,8 @@ export default function Stretches() {
       </div>
 
       <div className="stretches-section">
-        <h3 className="section-title">
-          RECOMMENDED FOR YOU
-        </h3>
-        
+        <h3 className="section-title">RECOMMENDED FOR YOU</h3>
+
         <div className="stretches-list">
           {stretches.map(stretch => (
             <div key={stretch.id} className={`stretch-card ${stretch.recommended ? 'recommended' : ''} ${openedStretch === stretch.id ? 'active' : ''}`}>
@@ -121,13 +124,24 @@ export default function Stretches() {
                       <li key={idx}>{detail}</li>
                     ))}
                   </ul>
+                  <div className="video-card">
+                    {stretch.image ? (
+                      <img src={stretch.image} alt={stretch.name} />
+                    ) : (
+                      <iframe
+                        title={stretch.name}
+                        src={`https://www.youtube.com/embed/${stretch.videoId}`}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           ))}
         </div>
       </div>
-
     </div>
   )
 }

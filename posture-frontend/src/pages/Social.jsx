@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import '../styles/pages.css'
 
-export default function Social() {
+export default function Social({ user }) {
   const [joinedRooms, setJoinedRooms] = useState([])
-  const [joinedBuddies, setJoinedBuddies] = useState([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [friends, setFriends] = useState([1, 2])
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [roomName, setRoomName] = useState('')
 
   const studyBuddies = [
     {
@@ -41,7 +44,13 @@ export default function Social() {
     },
   ]
 
-  const studyRooms = [
+  const people = [
+    { id: 4, name: 'Mina Patel', username: 'mina', role: 'Design student' },
+    { id: 5, name: 'Theo Brooks', username: 'theo', role: 'Law student' },
+    { id: 6, name: 'Lina Kim', username: 'lina', role: 'Engineering student' }
+  ]
+
+  const [studyRooms, setStudyRooms] = useState([
     {
       id: 1,
       name: 'Finals Prep Squad',
@@ -54,7 +63,7 @@ export default function Social() {
       creator: 'Jordan Smith',
       studying: 2
     },
-  ]
+  ])
 
   const leaderboard = [
     { rank: '🥇', initials: 'SW', name: 'Sam Williams', time: '210m', level: 'Lvl 5' },
@@ -63,10 +72,36 @@ export default function Social() {
   ]
 
   const toggleRoom = (roomId) => {
-    setJoinedRooms(prev => 
+    setJoinedRooms(prev =>
       prev.includes(roomId) ? prev.filter(id => id !== roomId) : [...prev, roomId]
     )
   }
+
+  const addFriend = (friendId) => {
+    setFriends(prev => prev.includes(friendId) ? prev : [...prev, friendId])
+  }
+
+  const handleCreateRoom = () => {
+    if (!roomName.trim()) return
+
+    const newRoom = {
+      id: Date.now(),
+      name: roomName.trim(),
+      creator: user?.displayName || 'You',
+      studying: 1
+    }
+
+    setStudyRooms(prev => [newRoom, ...prev])
+    setRoomName('')
+    setShowCreateModal(false)
+  }
+
+  const filteredPeople = searchTerm.trim()
+    ? people.filter(person => {
+        const haystack = `${person.name} ${person.username}`.toLowerCase()
+        return haystack.includes(searchTerm.trim().toLowerCase())
+      })
+    : []
 
   return (
     <div className="page social-page">
@@ -78,20 +113,59 @@ export default function Social() {
         <p className="social-subtitle">Study with friends</p>
       </div>
 
-      {/* Study Buddies Section */}
+      <div className="social-section">
+        <h3 className="section-title">
+          <span className="icon">🔎</span>
+          Find friends
+        </h3>
+
+        <div className="friend-search-card">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search by name or username"
+          />
+
+          {filteredPeople.length > 0 && (
+            <div className="friend-results">
+              {filteredPeople.map(person => (
+                <div key={person.id} className="friend-result-row">
+                  <div>
+                    <div className="friend-result-name">{person.name}</div>
+                    <div className="friend-result-meta">@{person.username} · {person.role}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="friend-action"
+                    onClick={() => addFriend(person.id)}
+                  >
+                    {friends.includes(person.id) ? 'Added' : 'Add'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {searchTerm && filteredPeople.length === 0 && (
+            <p className="friend-empty">No matches yet. Try another name.</p>
+          )}
+        </div>
+      </div>
+
       <div className="social-section">
         <h3 className="section-title">
           <span className="icon">👥</span>
           Study Buddies
         </h3>
-        
+
         <div className="buddies-list">
-          {studyBuddies.map(buddy => (
+          {studyBuddies.filter(buddy => friends.includes(buddy.id) || buddy.id === 1).map(buddy => (
             <div key={buddy.id} className="buddy-card">
               <div className="buddy-avatar" style={{ backgroundColor: buddy.color }}>
                 {buddy.initials}
               </div>
-              
+
               <div className="buddy-info">
                 <div className="buddy-name-row">
                   <h4 className="buddy-name">{buddy.name}</h4>
@@ -130,16 +204,15 @@ export default function Social() {
         </div>
       </div>
 
-      {/* Study Rooms Section */}
       <div className="social-section">
         <div className="section-header">
           <h3 className="section-title">
             <span className="icon">🏫</span>
             Study Rooms
           </h3>
-          <button className="create-btn">+ Create Room</button>
+          <button className="create-btn" onClick={() => setShowCreateModal(true)}>+ Create Room</button>
         </div>
-        
+
         <div className="rooms-list">
           {studyRooms.map(room => (
             <div key={room.id} className={`room-card ${joinedRooms.includes(room.id) ? 'joined' : ''}`}>
@@ -147,7 +220,7 @@ export default function Social() {
                 <h4 className="room-name">{room.name}</h4>
                 <p className="room-meta">by {room.creator} · {room.studying} studying</p>
               </div>
-              <button 
+              <button
                 className="room-btn"
                 onClick={() => toggleRoom(room.id)}
               >
@@ -158,14 +231,13 @@ export default function Social() {
         </div>
       </div>
 
-      {/* Leaderboard Section */}
       <div className="social-section">
         <h3 className="section-title">
           <span className="icon">🏆</span>
           Leaderboard
         </h3>
-        <p className="leaderboard-subtitle">This week's study time</p>
-        
+        <p className="leaderboard-subtitle">This week&apos;s study time</p>
+
         <div className="leaderboard-list">
           {leaderboard.map((entry, idx) => (
             <div key={idx} className="leaderboard-entry">
@@ -182,6 +254,25 @@ export default function Social() {
           ))}
         </div>
       </div>
+
+      {showCreateModal && (
+        <div className="modal-backdrop" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <h3>Create a study room</h3>
+            <p>Invite friends to a focused session.</p>
+            <input
+              type="text"
+              value={roomName}
+              onChange={(event) => setRoomName(event.target.value)}
+              placeholder="Example: Midnight Review"
+            />
+            <div className="modal-actions">
+              <button type="button" className="ghost-btn" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <button type="button" className="primary-btn" onClick={handleCreateRoom}>Create</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
