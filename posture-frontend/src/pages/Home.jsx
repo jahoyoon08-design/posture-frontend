@@ -1,19 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import '../styles/pages.css'
 
-export default function Home() {
-  const [postureScore, setPostureScore] = useState(0)
+export default function Home({ user, onOpenSettings }) {
+  const [postureScore] = useState(82)
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()
-  // Mocked user stats for home page
-  const [streak] = useState(0)
-  const [studyTime] = useState(0) // in minutes
-  const [breaksTaken] = useState(0)
-  const [focusLapses] = useState(0)
-
-  // Level / XP
-  const [level] = useState(1)
-  const [levelName] = useState('Beginner')
-  const [xp] = useState(0)
+  const [streak] = useState(6)
+  const [studyTime] = useState(92)
+  const [breaksTaken] = useState(12)
+  const [focusLapses] = useState(1)
+  const [level] = useState(3)
+  const [levelName] = useState('Focus Builder')
+  const [xp] = useState(74)
   const [xpToNext] = useState(100)
   const [showXpInfo, setShowXpInfo] = useState(false)
 
@@ -28,7 +25,6 @@ export default function Home() {
   }
 
   const getPostureColor = (score) => {
-    // Use monochrome palette: greys and black for UI
     if (score < 40) return 'var(--text-light)'
     if (score < 70) return 'var(--secondary)'
     return 'var(--text)'
@@ -37,12 +33,23 @@ export default function Home() {
   return (
     <div className="page home-page">
       <div className="page-header">
-        <h1>Posturable</h1>
+        <div>
+          <h1>Posturable</h1>
+          <p className="page-title">Hello, {user?.displayName || 'friend'}</p>
+        </div>
         <p className="date">{today}</p>
       </div>
 
+      <div className="welcome-card">
+        <div>
+          <p className="welcome-eyebrow">Today&apos;s plan</p>
+          <h2>Stay tall, study steadily, and keep your pose in check.</h2>
+        </div>
+        <button type="button" className="ghost-btn" onClick={onOpenSettings}>Edit profile</button>
+      </div>
+
       <div className="posture-card">
-        <h2>Today's Posture Score</h2>
+        <h2>Today&apos;s Posture Score</h2>
         <div className="score-container">
           <div className="score-display">
             <div className="score-circle" style={{ borderColor: getPostureColor(postureScore) }}>
@@ -54,18 +61,15 @@ export default function Home() {
             <span className="status-label">{getPostureStatus(postureScore)}</span>
           </div>
         </div>
-        
+
         <div className="progress-bar">
-          <div 
-            className="progress-fill" 
-            style={{ 
-              width: `${postureScore}%`,
-              backgroundColor: getPostureColor(postureScore)
-            }}
+          <div
+            className="progress-fill"
+            style={{ width: `${postureScore}%` }}
           ></div>
         </div>
 
-        <p className="score-message">Start a study session to track your posture.</p>
+        <p className="score-message">A short stretch break can help you reset and feel more alert.</p>
       </div>
 
       <div className="home-stats">
@@ -117,12 +121,24 @@ export default function Home() {
             <div className="xp-meta">{xpToNext - xp} XP until Level {level + 1}</div>
             {showXpInfo && (
               <div className="xp-info-text">
-                <strong>How XP adds up:</strong>
-                <ul>
-                  <li>{xpPerStudy} XP per study session</li>
-                  <li>{xpPerBreak} XP per break session</li>
-                  <li>{xpPerMinute} XP per focused minute</li>
-                </ul>
+                <div className="xp-info-section">
+                  <strong>Posture score</strong>
+                  <ul>
+                    <li>Start at 100 each study session</li>
+                    <li>High severity (-30): severe slouched posture, head forward too much</li>
+                    <li>Medium severity (-20): mild slouch</li>
+                    <li>Low severity (-10): slight drift from ideal posture</li>
+                  </ul>
+                </div>
+                <div className="xp-info-section">
+                  <strong>XP</strong>
+                  <ul>
+                    <li>Session score &gt; 80 → +10 XP</li>
+                    <li>Improvement in posture score vs yesterday → +10 XP</li>
+                    <li>Corrected posture within 5–10s → +10 XP</li>
+                    <li>Maintain streak → +10 XP</li>
+                  </ul>
+                </div>
                 <div className="xp-info-note">Current goal: earn {xpToNext - xp} more XP to unlock Level {level + 1}.</div>
               </div>
             )}

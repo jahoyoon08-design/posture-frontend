@@ -41,10 +41,10 @@ export default function Study() {
   }, [isRunning, timeLeft, sessionType, workMinutes, breakMinutes])
 
   useEffect(() => {
-    if (!isRunning) {
+    if (!isRunning && (timeLeft === totalSeconds || timeLeft > totalSeconds || timeLeft === 0)) {
       setTimeLeft(totalSeconds)
     }
-  }, [totalSeconds, isRunning])
+  }, [totalSeconds, isRunning, timeLeft])
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
