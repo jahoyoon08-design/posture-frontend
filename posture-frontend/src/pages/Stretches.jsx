@@ -1,5 +1,11 @@
 import { useState } from 'react'
 import '../styles/pages.css'
+import twistImg from '../assets/seated-spinal-twist.png'
+import forwardBendImg from '../assets/seated-forward-bend.png'
+import neckRollsImg from '../assets/neck-rolls.png'
+import shoulderShrugsImg from '../assets/shoulder-shrugs.png'
+import wristCirclesImg from '../assets/wrist-circles.png'
+import eyeExercisesImg from '../assets/eye-exercises.png'
 
 export default function Stretches() {
   const [openedStretch, setOpenedStretch] = useState(1)
@@ -11,7 +17,7 @@ export default function Stretches() {
       recommended: true,
       description: 'Gentle twist to mobilize the spine',
       duration: '2 minutes',
-      image: '/assets/seated-spinal-twist.png',
+      image: twistImg,
       details: [
         'Maintain a long spine and breathe deeply.',
         'Hold for 30 seconds on each side.',
@@ -24,7 +30,7 @@ export default function Stretches() {
       name: 'Seated Forward Bend',
       description: 'Stretch your back and hamstrings',
       duration: '2 minutes',
-      image: '/assets/seated-forward-bend.png',
+      image: forwardBendImg,
       details: [
         'Reach towards your toes while keeping the spine straight.',
         'Relax your neck and breathe into the stretch.',
@@ -37,7 +43,7 @@ export default function Stretches() {
       name: 'Neck Rolls',
       description: 'Release tension from your neck',
       duration: '1 minute',
-      image: '/assets/neck-rolls.png',
+      image: neckRollsImg,
       details: [
         'Move slowly and avoid sudden jerks.',
         'Keep your shoulders down while rolling.',
@@ -49,7 +55,7 @@ export default function Stretches() {
       name: 'Shoulder Shrugs',
       description: 'Loosen up your shoulder muscles',
       duration: '1 minute',
-      image: '/assets/shoulder-shrugs.png',
+      image: shoulderShrugsImg,
       details: [
         'Lift your shoulders towards your ears.',
         'Hold briefly and release down.',
@@ -61,7 +67,7 @@ export default function Stretches() {
       name: 'Wrist Circles',
       description: 'Improve wrist flexibility',
       duration: '1 minute',
-      image: '/assets/wrist-circles.png',
+      image: wristCirclesImg,
       details: [
         'Rotate wrists clockwise and counter-clockwise.',
         'Keep movements smooth and gentle.',
@@ -73,7 +79,7 @@ export default function Stretches() {
       name: 'Eye Exercises',
       description: 'Reduce eye strain from screen time',
       duration: '2 minutes',
-      image: '/assets/eye-exercises.png',
+      image: eyeExercisesImg,
       details: [
         'Look up and down slowly.',
         'Then shift gaze left and right.',
