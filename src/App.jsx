@@ -6,6 +6,7 @@ import Stats from './pages/Stats'
 import Stretches from './pages/Stretches'
 import Social from './pages/Social'
 import Settings from './pages/Settings'
+import studyIcon from './assets/study icon.png'
 import stretchIcon from './assets/stretch-icon.png'
 import { MdHome, MdMenuBook, MdBarChart, MdFitnessCenter, MdPeople } from 'react-icons/md'
 
@@ -166,7 +167,7 @@ function App() {
 
           <div className="auth-switch-row">
             <span>{authMode === 'login' ? 'New here?' : 'Already have an account?'}</span>
-            <button type="button" className="text-btn" onClick={() => setAuthMode(prev => prev === 'login' ? 'signup' : 'login')}>
+            <button type="button" className="ghost-btn" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}>
               {authMode === 'login' ? 'Create account' : 'Log in'}
             </button>
           </div>
@@ -199,12 +200,7 @@ function App() {
           onClick={() => setCurrentPage('study')}
           title="Study"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M4 5.5C4 4.7 4.7 4 5.5 4h13c.8 0 1.5.7 1.5 1.5V18c0 .8-.7 1.5-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18V5.5Z" />
-            <path d="M8 7.5h8" />
-            <path d="M8 11.5h8" />
-            <path d="M8 15.5h5" />
-          </svg>
+          <img src={studyIcon} alt="Study" className="nav-icon-image" />
           <span>Study</span>
         </button>
 
@@ -241,14 +237,23 @@ function App() {
         </button>
 
         <button
-          className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
+          className={`nav-item profile-nav-item ${currentPage === 'settings' ? 'active' : ''}`}
           onClick={() => setCurrentPage('settings')}
           title="Settings"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="7" r="3" />
-            <path d="M7 20c0-3 2.5-5 5-5s5 2 5 5" />
-          </svg>
+          <span className="profile-nav-icon">
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user?.displayName ? `${user.displayName} profile` : 'Profile'}
+                className="profile-nav-avatar"
+              />
+            ) : (
+              <span className="profile-nav-fallback">
+                {(user?.displayName || 'U')[0].toUpperCase()}
+              </span>
+            )}
+          </span>
           <span>Profile</span>
         </button>
       </nav>

@@ -1,10 +1,55 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import '../styles/pages.css'
 
+const STORAGE_KEYS = {
+  rooms: 'posturable-social-study-rooms',
+  friends: 'posturable-social-friends',
+  joined: 'posturable-social-joined-rooms'
+}
+
+const DEFAULT_ROOMS = [
+  {
+    id: 1,
+    name: 'Finals Prep Squad',
+    creator: 'Alex Chen',
+    studying: 4
+  },
+  {
+    id: 2,
+    name: 'Morning Study Club',
+    creator: 'Jordan Smith',
+    studying: 2
+  },
+]
+
+const DEFAULT_FRIENDS = [1, 2]
+
+const readStoredArray = (key, fallback) => {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : fallback
+  } catch {
+    return fallback
+  }
+}
+
+const getInitials = (name) =>
+  name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
 export default function Social({ user }) {
-  const [joinedRooms, setJoinedRooms] = useState([])
+  const [joinedRooms, setJoinedRooms] = useState(() => readStoredArray(STORAGE_KEYS.joined, []))
   const [searchTerm, setSearchTerm] = useState('')
-  const [friends, setFriends] = useState([1, 2])
+  const [friends, setFriends] = useState(() => readStoredArray(STORAGE_KEYS.friends, DEFAULT_FRIENDS))
+  const [showAllFriends, setShowAllFriends] = useState(false)
+  const [showAllRooms, setShowAllRooms] = useState(false)
+  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [roomName, setRoomName] = useState('')
 
@@ -50,26 +95,52 @@ export default function Social({ user }) {
     { id: 6, name: 'Lina Kim', username: 'lina', role: 'Engineering student' }
   ]
 
-  const [studyRooms, setStudyRooms] = useState([
-    {
-      id: 1,
-      name: 'Finals Prep Squad',
-      creator: 'Alex Chen',
-      studying: 4
-    },
-    {
-      id: 2,
-      name: 'Morning Study Club',
-      creator: 'Jordan Smith',
-      studying: 2
-    },
-  ])
+  const [studyRooms, setStudyRooms] = useState(() => readStoredArray(STORAGE_KEYS.rooms, DEFAULT_ROOMS))
 
   const leaderboard = [
     { rank: '🥇', initials: 'SW', name: 'Sam Williams', time: '210m', level: 'Lvl 5' },
     { rank: '🥈', initials: 'AC', name: 'Alex Chen', time: '145m', level: 'Lvl 4' },
     { rank: '🥉', initials: 'JS', name: 'Jordan Smith', time: '98m', level: 'Lvl 3' },
   ]
+
+  const friendDirectory = useMemo(() => {
+    const buddyEntries = studyBuddies.map((buddy) => ({
+      id: buddy.id,
+      name: buddy.name,
+      initials: buddy.initials,
+      color: buddy.color,
+      meta: `${buddy.status} · ${buddy.level}`
+    }))
+
+    const peopleEntries = people.map((person) => ({
+      id: person.id,
+      name: person.name,
+      initials: getInitials(person.name),
+      color: '#cbd5e1',
+      meta: person.role
+    }))
+
+    return [...buddyEntries, ...peopleEntries]
+  }, [studyBuddies, people])
+
+  const currentFriends = friendDirectory.filter((friend) => friends.includes(friend.id))
+  const displayedFriends = showAllFriends ? friendDirectory : currentFriends
+  const displayedRooms = showAllRooms ? studyRooms : studyRooms.slice(0, 2)
+  const displayedLeaderboard = showAllLeaderboard ? leaderboard : leaderboard.slice(0, 2)
+  const canExpandRooms = studyRooms.length > 2
+  const canExpandLeaderboard = leaderboard.length > 2
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEYS.rooms, JSON.stringify(studyRooms))
+  }, [studyRooms])
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEYS.friends, JSON.stringify(friends))
+  }, [friends])
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEYS.joined, JSON.stringify(joinedRooms))
+  }, [joinedRooms])
 
   const toggleRoom = (roomId) => {
     setJoinedRooms(prev =>
@@ -114,10 +185,7 @@ export default function Social({ user }) {
       </div>
 
       <div className="social-section">
-        <h3 className="section-title">
-          <span className="icon">🔎</span>
-          Find friends
-        </h3>
+        <h3 className="section-title">Find friends</h3>
 
         <div className="friend-search-card">
           <input
@@ -154,67 +222,50 @@ export default function Social({ user }) {
       </div>
 
       <div className="social-section">
-        <h3 className="section-title">
-          <span className="icon">👥</span>
-          Study Buddies
-        </h3>
+        <div className="section-header">
+          <h3 className="section-title">Current Friends ({currentFriends.length})</h3>
+        </div>
 
-        <div className="buddies-list">
-          {studyBuddies.filter(buddy => friends.includes(buddy.id) || buddy.id === 1).map(buddy => (
-            <div key={buddy.id} className="buddy-card">
-              <div className="buddy-avatar" style={{ backgroundColor: buddy.color }}>
-                {buddy.initials}
+        {displayedFriends.length > 0 ? (
+          <div className="current-friends-list">
+            {displayedFriends.map((friend) => (
+              <div key={friend.id} className="current-friend-chip">
+                <div className="current-friend-main">
+                  <div className="current-friend-avatar" style={{ backgroundColor: friend.color }}>
+                    {friend.initials}
+                  </div>
+                  <div>
+                    <div className="current-friend-name">{friend.name}</div>
+                    <div className="current-friend-meta">{friend.meta}</div>
+                  </div>
+                </div>
+                {!friends.includes(friend.id) && <span className="friend-not-added">Not added</span>}
               </div>
+            ))}
+          </div>
+        ) : (
+          <p className="friend-empty">No friends added yet. Search for someone above.</p>
+        )}
 
-              <div className="buddy-info">
-                <div className="buddy-name-row">
-                  <h4 className="buddy-name">{buddy.name}</h4>
-                  <span className="buddy-level">{buddy.level}</span>
-                </div>
-                <span className={`buddy-status ${buddy.status === 'Studying' ? 'active' : buddy.status === 'Online' ? 'online' : 'offline'}`}>
-                  {buddy.status}
-                </span>
-              </div>
-
-              <div className="buddy-stats">
-                <div className="buddy-stat">
-                  <svg className="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="1"></circle>
-                  </svg>
-                  {buddy.streak}
-                </div>
-                <div className="buddy-stat">
-                  <svg className="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                  </svg>
-                  {buddy.posture}
-                </div>
-                <div className="buddy-stat">
-                  <svg className="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="9"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                  </svg>
-                  {buddy.studyTime}
-                </div>
-              </div>
-
-              <button className="buddy-btn">Join</button>
-            </div>
-          ))}
+        <div className="section-more-row">
+          <button
+            type="button"
+            className="more-text-btn"
+            onClick={() => setShowAllFriends((prev) => !prev)}
+          >
+            {showAllFriends ? 'Less' : 'More'}
+          </button>
         </div>
       </div>
 
       <div className="social-section">
         <div className="section-header">
-          <h3 className="section-title">
-            <span className="icon">🏫</span>
-            Study Rooms
-          </h3>
+          <h3 className="section-title">Study Rooms</h3>
           <button className="create-btn" onClick={() => setShowCreateModal(true)}>+ Create Room</button>
         </div>
 
         <div className="rooms-list">
-          {studyRooms.map(room => (
+          {displayedRooms.map(room => (
             <div key={room.id} className={`room-card ${joinedRooms.includes(room.id) ? 'joined' : ''}`}>
               <div className="room-info">
                 <h4 className="room-name">{room.name}</h4>
@@ -229,17 +280,27 @@ export default function Social({ user }) {
             </div>
           ))}
         </div>
+
+        <div className="section-more-row">
+          <button
+            type="button"
+            className="more-text-btn"
+            onClick={() => setShowAllRooms((prev) => !prev)}
+            disabled={!canExpandRooms}
+          >
+            {showAllRooms ? 'Less' : 'More'}
+          </button>
+        </div>
       </div>
 
       <div className="social-section">
-        <h3 className="section-title">
-          <span className="icon">🏆</span>
-          Leaderboard
-        </h3>
+        <div className="section-header">
+          <h3 className="section-title">Leaderboard</h3>
+        </div>
         <p className="leaderboard-subtitle">This week&apos;s study time</p>
 
         <div className="leaderboard-list">
-          {leaderboard.map((entry, idx) => (
+          {displayedLeaderboard.map((entry, idx) => (
             <div key={idx} className="leaderboard-entry">
               <div className="rank-medal">{entry.rank}</div>
               <div className="entry-avatar">{entry.initials}</div>
@@ -253,6 +314,18 @@ export default function Social({ user }) {
             </div>
           ))}
         </div>
+
+        {canExpandLeaderboard && (
+          <div className="section-more-row">
+            <button
+              type="button"
+              className="more-text-btn"
+              onClick={() => setShowAllLeaderboard((prev) => !prev)}
+            >
+              {showAllLeaderboard ? 'Less' : 'More'}
+            </button>
+          </div>
+        )}
       </div>
 
       {showCreateModal && (

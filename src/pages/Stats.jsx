@@ -1,5 +1,36 @@
 import { useState } from 'react'
 import '../styles/pages.css'
+import ach1 from '../assets/ach1.png'
+import ach2 from '../assets/ach2.png'
+import ach3 from '../assets/ach3.png'
+import ach4 from '../assets/ach4.png'
+import ach5 from '../assets/ach5.png'
+import ach6 from '../assets/ach6.png'
+import ach7 from '../assets/ach7.png'
+import ach8 from '../assets/ach8.png'
+
+const assetModules = import.meta.glob('../assets/*.{png,jpg,jpeg,webp,svg}', {
+  eager: true,
+  import: 'default',
+})
+
+const normalizeFileKey = (value) =>
+  value
+    .toLowerCase()
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[\s_-]+/g, '')
+
+const achievementImageLookup = Object.fromEntries(
+  Object.entries(assetModules).map(([filePath, src]) => {
+    const fileName = filePath.split('/').pop() || ''
+    return [normalizeFileKey(fileName), src]
+  })
+)
+
+const getAchievementImage = (title, fallback) => {
+  const byTitle = achievementImageLookup[normalizeFileKey(title)]
+  return byTitle || fallback || null
+}
 
 function AchievementIcon({ type }) {
   switch (type) {
@@ -61,14 +92,14 @@ export default function Stats() {
   ]
 
   const achievements = [
-    { type: 'flame', title: 'Week Warrior', desc: '6-day streak' },
-    { type: 'book', title: 'Study Master', desc: '90+ minutes studied' },
-    { type: 'target', title: 'Posture Pro', desc: '80+ avg score' },
-    { type: 'spark', title: 'Break Taker', desc: '12 breaks taken' },
-    { type: 'medal', title: 'Month Master', desc: '30-day streak' },
-    { type: 'spark', title: 'Consistent', desc: 'Study 5 days/wk' },
-    { type: 'book', title: 'Early Bird', desc: 'First session' },
-    { type: 'target', title: 'Perfect Week', desc: 'Posture ≥85 all week' },
+    { img: getAchievementImage('Week Warrior', ach1), title: 'Week Warrior', desc: '6-day streak' },
+    { img: getAchievementImage('Study Master', ach2), title: 'Study Master', desc: '90+ minutes studied' },
+    { img: getAchievementImage('Month Master', ach3), title: 'Month Master', desc: '30-day streak' },
+    { img: getAchievementImage('Posture Pro', ach4), title: 'Posture Pro', desc: '80+ avg score' },
+    { img: getAchievementImage('Break Taker', ach5), title: 'Break Taker', desc: '12 breaks taken' },
+    { img: getAchievementImage('Consistent', ach6), title: 'Consistent', desc: 'Study 5 days/wk' },
+    { img: getAchievementImage('Early Bird', ach7), title: 'Early Bird', desc: 'First session' },
+    { img: getAchievementImage('Perfect Week', ach8), title: 'Perfect Week', desc: 'Posture ≥85 all week' },
   ]
 
   const weeklyData = {
@@ -180,7 +211,11 @@ export default function Stats() {
           {achievements.map((achievement, idx) => (
             <div key={idx} className="achievement-card">
               <div className="achievement-emoji">
-                <AchievementIcon type={achievement.type} />
+                {achievement.img ? (
+                  <img src={achievement.img} alt={achievement.title} className="achievement-img" />
+                ) : (
+                  <AchievementIcon type={achievement.type} />
+                )}
               </div>
               <div className="achievement-title">{achievement.title}</div>
               <div className="achievement-desc">{achievement.desc}</div>

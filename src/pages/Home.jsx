@@ -13,6 +13,7 @@ export default function Home({ user, onOpenSettings }) {
   const [xp] = useState(74)
   const [xpToNext] = useState(100)
   const [showXpInfo, setShowXpInfo] = useState(false)
+  const [showPostureInfo, setShowPostureInfo] = useState(false)
 
   const xpPerStudy = 5
   const xpPerBreak = 2
@@ -32,24 +33,39 @@ export default function Home({ user, onOpenSettings }) {
 
   return (
     <div className="page home-page">
-      <div className="page-header">
+      <div className="page-header home-header">
         <div>
           <h1>Posturable</h1>
-          <p className="page-title">Hello, {user?.displayName || 'friend'}</p>
+          <div className="home-greeting-row">
+            <p className="home-title">Hello {user?.displayName || 'friend'}!</p>
+          </div>
         </div>
         <p className="date">{today}</p>
       </div>
 
-      <div className="welcome-card">
-        <div>
-          <p className="welcome-eyebrow">Today&apos;s plan</p>
-          <h2>Stay tall, study steadily, and keep your pose in check.</h2>
-        </div>
-        <button type="button" className="ghost-btn" onClick={onOpenSettings}>Edit profile</button>
-      </div>
-
       <div className="posture-card">
-        <h2>Today&apos;s Posture Score</h2>
+        <div className="posture-card-title-row">
+          <h2>Today&apos;s Posture Score</h2>
+          <button
+            type="button"
+            className="posture-info-button"
+            onClick={() => setShowPostureInfo(prev => !prev)}
+            aria-label="Posture score info"
+          >
+            i
+          </button>
+        </div>
+        {showPostureInfo && (
+          <div className="posture-info-box">
+            <p><strong>Posture score:</strong></p>
+            <ul>
+              <li>Starts at 100 each study session</li>
+              <li><strong>High severity (-30):</strong> severe slouched posture, head forward too much</li>
+              <li><strong>Medium severity (-20):</strong> mild slouch</li>
+              <li><strong>Low severity (-10):</strong> slight drift from ideal posture</li>
+            </ul>
+          </div>
+        )}
         <div className="score-container">
           <div className="score-display">
             <div className="score-circle" style={{ borderColor: getPostureColor(postureScore) }}>
@@ -121,25 +137,14 @@ export default function Home({ user, onOpenSettings }) {
             <div className="xp-meta">{xpToNext - xp} XP until Level {level + 1}</div>
             {showXpInfo && (
               <div className="xp-info-text">
-                <div className="xp-info-section">
-                  <strong>Posture score</strong>
-                  <ul>
-                    <li>Start at 100 each study session</li>
-                    <li>High severity (-30): severe slouched posture, head forward too much</li>
-                    <li>Medium severity (-20): mild slouch</li>
-                    <li>Low severity (-10): slight drift from ideal posture</li>
-                  </ul>
-                </div>
-                <div className="xp-info-section">
-                  <strong>XP</strong>
-                  <ul>
-                    <li>Session score &gt; 80 → +10 XP</li>
-                    <li>Improvement in posture score vs yesterday → +10 XP</li>
-                    <li>Corrected posture within 5–10s → +10 XP</li>
-                    <li>Maintain streak → +10 XP</li>
-                  </ul>
-                </div>
-                <div className="xp-info-note">Current goal: earn {xpToNext - xp} more XP to unlock Level {level + 1}.</div>
+                <div className="xp-info-note">Current goal: earn {xpToNext - xp} more XP to reach Level {level + 1}.</div>
+                <ul>
+                  <li>Posture starts at 100 each study session. Keep your neck, shoulders, and spine aligned to keep points high.</li>
+                  <li>Session score &gt; 80 → +10 XP</li>
+                  <li>Improvement in posture score vs yesterday → +10 XP</li>
+                  <li>Corrected posture within 5-10s → +10 XP</li>
+                  <li>Maintain streak → +10 XP</li>
+                </ul>
               </div>
             )}
           </div>
