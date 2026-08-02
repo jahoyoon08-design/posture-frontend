@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import '../styles/pages.css'
 
+// Shared with Home.jsx so "Today's Posture Score" reflects the latest tracked value.
+export const POSTURE_SCORE_STORAGE_KEY = 'posturable-posture-score'
+
+// Posture score starts at 100 and loses points depending on the detected status.
+const POSTURE_STATUS_DEDUCTIONS = {
+  'Good posture': 0,
+  'Neck bent forward': 30,
+  'Neck bent left': 20,
+  'Neck bent right': 20,
+  'Neck bent left forward': 50,
+  'Neck bent right forward': 50,
+  'Shoulders rounded': 20
+}
+
 export default function Study() {
   const [workMinutes, setWorkMinutes] = useState(25)
   const [breakMinutes, setBreakMinutes] = useState(5)
@@ -53,6 +67,13 @@ export default function Study() {
   }
 
   const toggleTimer = () => {
+    const startingUp = !isRunning
+    if (startingUp && !tracking) {
+      const wantsCamera = window.confirm('Turn on the camera to track your posture during this session?')
+      if (wantsCamera) {
+        startCamera()
+      }
+    }
     setIsRunning(prev => !prev)
   }
 
@@ -75,24 +96,92 @@ export default function Study() {
   const canvasRef = useRef(null)
   const cameraRef = useRef(null)
   const poseRef = useRef(null)
-  const [detectedPose, setDetectedPose] = useState(null)
+  const lastStatusUpdateRef = useRef(0)
+  const scoreSamplesRef = useRef([])
+  const scoreHistoryRef = useRef([])
+  const [postureStatus, setPostureStatus] = useState('Camera ready')
   const [tracking, setTracking] = useState(false)
+  const [cameraError, setCameraError] = useState('')
+  const [blurCamera, setBlurCamera] = useState(false)
+  const [postureScore, setPostureScore] = useState(() => {
+    const saved = Number(window.localStorage.getItem(POSTURE_SCORE_STORAGE_KEY))
+    return Number.isFinite(saved) && saved > 0 ? saved : 100
+  })
 
-  const sendLandmarks = async (landmarks) => {
-    try {
-      const res = await fetch('/api/pose/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ landmarks })
-      })
-      if (res.ok) {
-        const json = await res.json()
-        if (json && json.pose) setDetectedPose(json.pose)
-      }
-    } catch (err) {
-      // backend may not be available; ignore silently
-      // console.debug('predict error', err)
+  // Every 2 seconds, take the posture scores sampled during that window, add their
+  // average to the running history for this session, and display the average of
+  // the whole history so the score reflects the entire session, not just the last 2s.
+  useEffect(() => {
+    if (!tracking) return undefined
+
+    const interval = setInterval(() => {
+      const samples = scoreSamplesRef.current
+      if (samples.length === 0) return
+      const windowAverage = samples.reduce((sum, s) => sum + s, 0) / samples.length
+      scoreSamplesRef.current = []
+
+      scoreHistoryRef.current.push(windowAverage)
+      const history = scoreHistoryRef.current
+      const overallAverage = Math.round(history.reduce((sum, s) => sum + s, 0) / history.length)
+
+      setPostureScore(overallAverage)
+      window.localStorage.setItem(POSTURE_SCORE_STORAGE_KEY, String(overallAverage))
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [tracking])
+
+  // Rule-based posture analysis run entirely client-side on MediaPipe landmarks.
+  // Landmark indices follow the MediaPipe Pose model: 0 nose, 11/12 shoulders, 23/24 hips.
+  const analyzePosture = (landmarks) => {
+    const nose = landmarks[0]
+    const leftShoulder = landmarks[11]
+    const rightShoulder = landmarks[12]
+    const leftHip = landmarks[23]
+    const rightHip = landmarks[24]
+
+    if (!nose || !leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+      return null
     }
+
+    const shoulderMid = {
+      x: (leftShoulder.x + rightShoulder.x) / 2,
+      y: (leftShoulder.y + rightShoulder.y) / 2
+    }
+    const hipMid = {
+      x: (leftHip.x + rightHip.x) / 2,
+      y: (leftHip.y + rightHip.y) / 2
+    }
+
+    // Neck bend: angle between the nose and shoulder midpoint, relative to vertical
+    const shoulderWidth = Math.max(Math.abs(rightShoulder.x - leftShoulder.x), 0.0001)
+    const neckDeltaXSigned = nose.x - shoulderMid.x
+    const neckDeltaX = Math.abs(neckDeltaXSigned)
+    const neckDeltaY = Math.abs(nose.y - shoulderMid.y)
+    const neckAngle = (Math.atan2(neckDeltaX, neckDeltaY) * 180) / Math.PI
+    // How much of the neck bend is sideways vs. forward, normalized by shoulder width
+    const lateralRatio = neckDeltaXSigned / shoulderWidth
+
+    // Shoulder rounding / slouch: deviation of the shoulder midpoint from the hip midpoint
+    const spineDeltaX = Math.abs(shoulderMid.x - hipMid.x)
+    const spineDeltaY = Math.abs(shoulderMid.y - hipMid.y)
+    const spineDeviation = (Math.atan2(spineDeltaX, spineDeltaY) * 180) / Math.PI
+
+    if (neckAngle > 20) {
+      const lateralAbs = Math.abs(lateralRatio)
+      const isLeft = lateralRatio > 0
+      if (lateralAbs > 0.45) {
+        return isLeft ? 'Neck bent left' : 'Neck bent right'
+      }
+      if (lateralAbs > 0.2) {
+        return isLeft ? 'Neck bent left forward' : 'Neck bent right forward'
+      }
+      return 'Neck bent forward'
+    }
+    if (spineDeviation > 15) {
+      return 'Shoulders rounded'
+    }
+    return 'Good posture'
   }
 
   const onResults = (results) => {
@@ -103,35 +192,70 @@ export default function Study() {
     canvas.width = video.videoWidth || 640
     canvas.height = video.videoHeight || 480
 
-    // draw the camera image
+    // draw the camera image (landmark dots are intentionally not drawn, kept invisible)
     ctx.save()
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     if (results.image) ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height)
-
-    // draw pose landmarks
-    const lm = results.poseLandmarks || []
-    ctx.fillStyle = 'rgba(0,0,0,0.9)'
-    for (let i = 0; i < lm.length; i++) {
-      const x = lm[i].x * canvas.width
-      const y = lm[i].y * canvas.height
-      ctx.beginPath()
-      ctx.arc(x, y, 4, 0, 2 * Math.PI)
-      ctx.fill()
-    }
     ctx.restore()
 
+    const lm = results.poseLandmarks || []
+
     if (lm.length) {
-      const simplified = lm.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility }))
-      sendLandmarks(simplified)
+      const status = analyzePosture(lm)
+      const now = Date.now()
+      // Only read a new status once per second: update the displayed status and
+      // record one score sample for that reading (so a 2s window has ~2 samples to average).
+      if (status && now - lastStatusUpdateRef.current >= 1000) {
+        lastStatusUpdateRef.current = now
+        setPostureStatus(status)
+        const deduction = POSTURE_STATUS_DEDUCTIONS[status] ?? 0
+        scoreSamplesRef.current.push(100 - deduction)
+      }
     }
+  }
+
+  // @mediapipe/pose is a legacy UMD-style script that attaches itself to
+  // `window.Pose` as a side effect; it does not expose real ESM/CJS exports,
+  // so it must be loaded via a <script> tag rather than a bundler import.
+  const loadMediapipePose = () => {
+    if (window.Pose) {
+      return Promise.resolve(window.Pose)
+    }
+
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-mediapipe-pose]')
+
+      const handleLoad = () => {
+        if (window.Pose) resolve(window.Pose)
+        else reject(new Error('MediaPipe Pose script loaded but window.Pose is missing'))
+      }
+
+      if (existing) {
+        existing.addEventListener('load', handleLoad, { once: true })
+        existing.addEventListener('error', () => reject(new Error('Failed to load MediaPipe Pose script')), { once: true })
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js'
+      script.crossOrigin = 'anonymous'
+      script.dataset.mediapipePose = 'true'
+      script.addEventListener('load', handleLoad, { once: true })
+      script.addEventListener('error', () => reject(new Error('Failed to load MediaPipe Pose script')), { once: true })
+      document.body.appendChild(script)
+    })
   }
 
   const startCamera = async () => {
     if (tracking) return
+    setCameraError('')
+    lastStatusUpdateRef.current = 0
+    scoreSamplesRef.current = []
+    scoreHistoryRef.current = []
     try {
-      const { Pose } = await import('@mediapipe/pose')
+      const Pose = await loadMediapipePose()
 
-      const pose = new Pose.Pose({
+      const pose = new Pose({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
       })
       pose.setOptions({
@@ -163,8 +287,12 @@ export default function Study() {
       }
       requestAnimationFrame(frameLoop)
       setTracking(true)
+      setPostureStatus('Good posture')
     } catch (err) {
       console.error('Failed to start camera', err)
+      setCameraError('Could not start the camera. Please allow camera access and try again.')
+      setTracking(false)
+      setPostureStatus('Camera ready')
     }
   }
 
@@ -177,7 +305,8 @@ export default function Study() {
     if (poseRef.current && poseRef.current.close) poseRef.current.close()
     poseRef.current = null
     setTracking(false)
-    setDetectedPose(null)
+    setPostureStatus('Camera ready')
+    setCameraError('')
     if (videoRef.current) {
       try { videoRef.current.pause(); videoRef.current.srcObject = null } catch (e) {}
     }
@@ -313,21 +442,49 @@ export default function Study() {
         </div>
 
         <div className="camera-box" title="Posture tracking">
-          <div className="camera-controls">
-            <button id="start-camera" className="control-btn" onClick={() => startCamera()}>Start Camera</button>
-            <button id="stop-camera" className="control-btn reset" onClick={() => stopCamera()}>Stop Camera</button>
-            <div className="pose-result">Detected pose: <strong>{detectedPose || '—'}</strong></div>
-          </div>
-
-          <div className="camera-area">
+          <div className={`camera-area ${blurCamera ? 'blurred' : ''}`}>
             <video ref={videoRef} className="camera-video" playsInline></video>
             <canvas ref={canvasRef} className="camera-canvas"></canvas>
+            <button
+              id="blur-camera"
+              className={`blur-toggle-btn ${blurCamera ? 'active' : ''}`}
+              onClick={() => setBlurCamera(prev => !prev)}
+            >
+              {blurCamera ? 'Unblur' : 'Blur'}
+            </button>
           </div>
+
+          {cameraError && <div className="camera-error">{cameraError}</div>}
+
+          <div className="camera-controls">
+            <button
+              id="start-camera"
+              className="control-btn"
+              onClick={() => startCamera()}
+              disabled={tracking}
+            >
+              Start Camera
+            </button>
+            <button
+              id="stop-camera"
+              className="control-btn reset"
+              onClick={() => stopCamera()}
+              disabled={!tracking}
+            >
+              Stop Camera
+            </button>
+          </div>
+
           <div className="camera-text">Posture tracker (using MediaPipe)</div>
+          <div className="pose-result">Posture status: <strong>{postureStatus}</strong></div>
         </div>
 
         <div className="sessions-count">
           Sessions completed: {sessionsCompleted}
+        </div>
+
+        <div className="posture-score-footer">
+          Today's Posture Score: <strong>{postureScore}</strong>/100
         </div>
       </div>
 

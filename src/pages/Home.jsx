@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import '../styles/pages.css'
+import { POSTURE_SCORE_STORAGE_KEY } from './Study'
 
 export default function Home({ user, onOpenSettings }) {
-  const [postureScore] = useState(82)
+  const [postureScore] = useState(() => {
+    const saved = Number(window.localStorage.getItem(POSTURE_SCORE_STORAGE_KEY))
+    return Number.isFinite(saved) && saved > 0 ? saved : 100
+  })
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()
   const [streak] = useState(6)
   const [studyTime] = useState(92)
@@ -20,15 +24,17 @@ export default function Home({ user, onOpenSettings }) {
   const xpPerMinute = 1
 
   const getPostureStatus = (score) => {
-    if (score < 40) return 'Needs work'
-    if (score < 70) return 'Good'
-    return 'Excellent'
+    if (score >= 85) return 'Excellent'
+    if (score >= 70) return 'Good'
+    if (score >= 50) return 'Average'
+    return 'Needs improvement'
   }
 
   const getPostureColor = (score) => {
-    if (score < 40) return 'var(--text-light)'
-    if (score < 70) return 'var(--secondary)'
-    return 'var(--text)'
+    if (score >= 85) return 'var(--text)'
+    if (score >= 70) return 'var(--secondary)'
+    if (score >= 50) return 'var(--secondary)'
+    return 'var(--text-light)'
   }
 
   return (
@@ -60,9 +66,10 @@ export default function Home({ user, onOpenSettings }) {
             <p><strong>Posture score:</strong></p>
             <ul>
               <li>Starts at 100 each study session</li>
-              <li><strong>High severity (-30):</strong> severe slouched posture, head forward too much</li>
-              <li><strong>Medium severity (-20):</strong> mild slouch</li>
-              <li><strong>Low severity (-10):</strong> slight drift from ideal posture</li>
+              <li><strong>Forward neck bend (-30):</strong> head bent straight forward</li>
+              <li><strong>Left / right neck bend (-20):</strong> head tilted sideways</li>
+              <li><strong>Diagonal neck bend (-50):</strong> head bent forward and to the side</li>
+              <li><strong>Shoulders rounded (-20):</strong> slouched shoulders</li>
             </ul>
           </div>
         )}

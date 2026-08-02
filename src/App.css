@@ -743,32 +743,11 @@ html, body, #root {
   color: var(--text-light);
 }
 
-.camera-box {
-  margin: 12px auto 18px;
-  width: 320px;
-  max-width: 100%;
-  height: 160px;
-  background: #0f1724; /* dark navy */
-  color: #9aa4b3;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 12px 30px rgba(2,6,23,0.18);
-  border: 1px solid rgba(255,255,255,0.02);
-}
-
 .camera-icon svg {
   width: 48px;
   height: 36px;
   color: #8b99a9;
   margin-bottom: 10px;
-}
-
-.camera-text {
-  font-size: 16px;
-  color: #9aa4b3;
 }
 
 .camera-info-box {
@@ -826,12 +805,7 @@ html, body, #root {
 }
 
 @media (max-width: 420px) {
-  .camera-box {
-    height: 120px;
-    border-radius: 12px;
-  }
   .camera-icon svg { width: 40px; height: 30px; }
-  .camera-text { font-size: 14px; }
 }
 
 .timer-settings {
@@ -923,6 +897,16 @@ html, body, #root {
   font-size: 14px;
   color: var(--text-light);
   margin-top: 16px;
+}
+
+.posture-score-footer {
+  font-size: 14px;
+  color: var(--text-light);
+  margin-top: 8px;
+}
+
+.posture-score-footer strong {
+  color: var(--text);
 }
 
 .session-tips {

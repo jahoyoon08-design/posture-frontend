@@ -227,18 +227,24 @@
   border-radius: 12px;
   padding: 12px;
   box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .camera-controls {
   display: flex;
   gap: 8px;
   align-items: center;
+  justify-content: center;
+  margin-top: 10px;
   margin-bottom: 8px;
 }
 .camera-area {
   position: relative;
   width: 100%;
-  max-width: 640px;
+  max-width: 320px;
   aspect-ratio: 4/3;
+  min-height: 210px;
   background: #000;
   border-radius: 8px;
   overflow: hidden;
@@ -249,8 +255,54 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: filter 0.2s ease;
+}
+.camera-area.blurred .camera-video,
+.camera-area.blurred .camera-canvas {
+  filter: blur(24px);
+}
+.blur-toggle-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.blur-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+.blur-toggle-btn.active {
+  background: var(--primary);
+}
+.camera-controls .control-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.camera-text {
+  font-size: 13px;
+  color: var(--text-light);
+  text-align: center;
 }
 .pose-result {
-  margin-left: 12px;
+  margin-top: 6px;
   font-size: 14px;
+  text-align: center;
+}
+.camera-controls .control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.camera-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 8px;
 }
