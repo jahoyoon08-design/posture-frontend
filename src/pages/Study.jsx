@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import '../styles/pages.css'
+import { updateHomeStats, addDailyActivity, addDailyPostureSample } from '../utils/homeStats'
 
 // Shared with Home.jsx so "Today's Posture Score" reflects the latest tracked value.
 export const POSTURE_SCORE_STORAGE_KEY = 'posturable-posture-score'
@@ -45,9 +46,22 @@ export default function Study() {
         setSessionsCompleted(prev => prev + 1)
         setSessionType('break')
         setTimeLeft(breakMinutes * 60)
+        updateHomeStats(stats => {
+          const today = new Date().toISOString().slice(0, 10)
+          const isNewDay = stats.lastActiveDate !== today
+          return {
+            ...stats,
+            studyMinutes: stats.studyMinutes + workMinutes,
+            streak: isNewDay ? stats.streak + 1 : stats.streak,
+            lastActiveDate: today
+          }
+        })
+        addDailyActivity({ studyMinutes: workMinutes })
       } else {
         setSessionType('work')
         setTimeLeft(workMinutes * 60)
+        updateHomeStats(stats => ({ ...stats, breaksTaken: stats.breaksTaken + 1 }))
+        addDailyActivity({ breaksTaken: 1 })
       }
     }
 
@@ -55,10 +69,10 @@ export default function Study() {
   }, [isRunning, timeLeft, sessionType, workMinutes, breakMinutes])
 
   useEffect(() => {
-    if (!isRunning && (timeLeft === totalSeconds || timeLeft > totalSeconds || timeLeft === 0)) {
+    if (!isRunning) {
       setTimeLeft(totalSeconds)
     }
-  }, [totalSeconds, isRunning, timeLeft])
+  }, [totalSeconds, isRunning])
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
@@ -99,6 +113,7 @@ export default function Study() {
   const lastStatusUpdateRef = useRef(0)
   const scoreSamplesRef = useRef([])
   const scoreHistoryRef = useRef([])
+  const wasGoodPostureRef = useRef(true)
   const [postureStatus, setPostureStatus] = useState('Camera ready')
   const [tracking, setTracking] = useState(false)
   const [cameraError, setCameraError] = useState('')
@@ -126,6 +141,7 @@ export default function Study() {
 
       setPostureScore(overallAverage)
       window.localStorage.setItem(POSTURE_SCORE_STORAGE_KEY, String(overallAverage))
+      addDailyPostureSample(Math.round(windowAverage))
     }, 2000)
 
     return () => clearInterval(interval)
@@ -210,6 +226,14 @@ export default function Study() {
         setPostureStatus(status)
         const deduction = POSTURE_STATUS_DEDUCTIONS[status] ?? 0
         scoreSamplesRef.current.push(100 - deduction)
+
+        // Count a "focus lapse" each time posture goes from good to bad,
+        // rather than on every bad sample while it stays bad.
+        const isGoodPosture = status === 'Good posture'
+        if (!isGoodPosture && wasGoodPostureRef.current) {
+          updateHomeStats(stats => ({ ...stats, focusLapses: stats.focusLapses + 1 }))
+        }
+        wasGoodPostureRef.current = isGoodPosture
       }
     }
   }
@@ -248,6 +272,8 @@ export default function Study() {
 
   const startCamera = async () => {
     if (tracking) return
+
+    stopCamera({ preserveError: true })
     setCameraError('')
     lastStatusUpdateRef.current = 0
     scoreSamplesRef.current = []
@@ -273,11 +299,38 @@ export default function Study() {
       video.srcObject = stream
       await video.play()
 
+      const hasLiveVideoTrack = () =>
+        stream.getVideoTracks().some((track) => track.readyState === 'live')
+
+      const handleCameraStop = () => {
+        if (!hasLiveVideoTrack()) {
+          pauseTimerForCameraIssue('Camera disconnected. Study timer paused.')
+        }
+      }
+
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener('ended', handleCameraStop)
+      })
+
       let stopped = false
-      cameraRef.current = { stream, stop: () => { stopped = true; stream.getTracks().forEach(t => t.stop()) } }
+      cameraRef.current = {
+        stream,
+        stop: () => {
+          stopped = true
+          stream.getVideoTracks().forEach((track) => {
+            track.removeEventListener('ended', handleCameraStop)
+            track.stop()
+          })
+        }
+      }
 
       const frameLoop = async () => {
-        if (stopped || !poseRef.current) return
+        if (stopped || !poseRef.current || !video.srcObject || !hasLiveVideoTrack()) {
+          if (!stopped) {
+            pauseTimerForCameraIssue('Camera disconnected. Study timer paused.')
+          }
+          return
+        }
         try {
           await poseRef.current.send({ image: video })
         } catch (e) {
@@ -296,21 +349,52 @@ export default function Study() {
     }
   }
 
-  const stopCamera = () => {
+  const stopCamera = (options = {}) => {
+    const { preserveError = false } = options
+
     try {
       if (cameraRef.current && cameraRef.current.stop) cameraRef.current.stop()
-      if (cameraRef.current && cameraRef.current.stream) cameraRef.current.stream.getTracks().forEach(t => t.stop())
+      if (cameraRef.current && cameraRef.current.stream) cameraRef.current.stream.getTracks().forEach((track) => {
+        track.onended = null
+        track.stop()
+      })
     } catch (e) {}
     cameraRef.current = null
     if (poseRef.current && poseRef.current.close) poseRef.current.close()
     poseRef.current = null
     setTracking(false)
     setPostureStatus('Camera ready')
-    setCameraError('')
+    if (!preserveError) setCameraError('')
     if (videoRef.current) {
-      try { videoRef.current.pause(); videoRef.current.srcObject = null } catch (e) {}
+      try {
+        videoRef.current.pause()
+        videoRef.current.srcObject = null
+        videoRef.current.load()
+      } catch (e) {}
     }
   }
+
+  const pauseTimerForCameraIssue = (message) => {
+    setIsRunning(false)
+    setCameraError(message)
+    setPostureStatus('Camera unavailable')
+    stopCamera({ preserveError: true })
+  }
+
+  useEffect(() => {
+    if (!tracking) return
+
+    const video = videoRef.current
+    if (!video) return
+
+    const handleVideoEnd = () => {
+      pauseTimerForCameraIssue('Camera disconnected. Study timer paused.')
+      setPostureStatus('Camera unavailable')
+    }
+
+    video.addEventListener('ended', handleVideoEnd)
+    return () => video.removeEventListener('ended', handleVideoEnd)
+  }, [tracking, isRunning])
 
   useEffect(() => {
     return () => stopCamera()
@@ -325,6 +409,10 @@ export default function Study() {
           <p className="page-title">Study</p>
         </div>
       </div>
+
+      <p className="study-instructions">
+        Tap the <strong>gear icon</strong> to set your study and break times with the sliders, then press <strong>Start</strong> to begin. Turn on the camera when prompted so your posture can be tracked during the session.
+      </p>
 
       <div className="timer-container">
         <div className="status-row">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import '../styles/pages.css'
 
 export default function Settings({ user, onUpdateUser, onLogout }) {
@@ -11,6 +11,17 @@ export default function Settings({ user, onUpdateUser, onLogout }) {
     avatar: user?.avatar || ''
   })
   const [status, setStatus] = useState('Personalize your profile and study vibe.')
+
+  useEffect(() => {
+    setForm({
+      displayName: user?.displayName || 'Ava',
+      username: user?.username || 'ava',
+      email: user?.email || 'ava@posturable.app',
+      password: '',
+      confirmPassword: '',
+      avatar: user?.avatar || ''
+    })
+  }, [user])
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -34,6 +45,7 @@ export default function Settings({ user, onUpdateUser, onLogout }) {
     }
 
     onUpdateUser(nextUser)
+    window.localStorage.setItem('posturable-user', JSON.stringify(nextUser))
     setStatus('Profile updated. Your next session is ready.')
   }
 

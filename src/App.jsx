@@ -9,17 +9,34 @@ import Settings from './pages/Settings'
 import studyIcon from './assets/study icon.png'
 import stretchIcon from './assets/stretch-icon.png'
 import { MdHome, MdMenuBook, MdBarChart, MdFitnessCenter, MdPeople } from 'react-icons/md'
+import { POSTURE_SCORE_STORAGE_KEY } from './pages/Study'
+import { resetHomeStats, resetLevelProgress, resetDailyHistory } from './utils/homeStats'
+
+const defaultUser = {
+  displayName: 'Ava',
+  username: 'ava',
+  email: 'ava@posturable.app',
+  password: 'posturable',
+  avatar: ''
+}
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    try {
+      return window.localStorage.getItem('posturable-auth') === 'true'
+    } catch {
+      return false
+    }
+  })
   const [authMode, setAuthMode] = useState('login')
-  const [user, setUser] = useState({
-    displayName: 'Ava',
-    username: 'ava',
-    email: 'ava@posturable.app',
-    password: 'posturable',
-    avatar: ''
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = window.localStorage.getItem('posturable-user')
+      return savedUser ? JSON.parse(savedUser) : defaultUser
+    } catch {
+      return defaultUser
+    }
   })
   const [authForm, setAuthForm] = useState({
     name: '',
@@ -27,19 +44,7 @@ function App() {
     password: '',
     confirmPassword: ''
   })
-
-  useEffect(() => {
-    const savedUser = window.localStorage.getItem('posturable-user')
-    const savedAuth = window.localStorage.getItem('posturable-auth')
-
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
-    }
-
-    if (savedAuth === 'true') {
-      setIsAuthenticated(true)
-    }
-  }, [])
+  const [authError, setAuthError] = useState('')
 
   useEffect(() => {
     window.localStorage.setItem('posturable-user', JSON.stringify(user))
@@ -50,11 +55,56 @@ function App() {
     setAuthForm(prev => ({ ...prev, [field]: value }))
   }
 
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+
+  const isStrongPassword = (password) =>
+    password.length >= 6 &&
+    /[a-zA-Z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^a-zA-Z0-9]/.test(password)
+
   const handleAuthSubmit = (event) => {
     event.preventDefault()
+    setAuthError('')
 
-    if (authMode === 'signup' && authForm.password !== authForm.confirmPassword) {
-      return
+    if (authMode === 'signup') {
+      if (!authForm.name.trim() || !authForm.email.trim() || !authForm.password || !authForm.confirmPassword) {
+        setAuthError('Please fill in all fields.')
+        return
+      }
+
+      if (!isValidEmail(authForm.email.trim())) {
+        setAuthError('Please enter a valid email address.')
+        return
+      }
+
+      if (!isStrongPassword(authForm.password)) {
+        setAuthError('Password must be at least 6 characters and include a letter, a number, and a symbol.')
+        return
+      }
+
+      if (authForm.password !== authForm.confirmPassword) {
+        setAuthError('Passwords do not match.')
+        return
+      }
+    } else {
+      if (!authForm.email.trim() || !authForm.password) {
+        setAuthError('Please enter your email and password.')
+        return
+      }
+
+      if (!isValidEmail(authForm.email.trim())) {
+        setAuthError('Please enter a valid email address.')
+        return
+      }
+
+      const emailMatches = authForm.email.trim().toLowerCase() === (user.email || '').toLowerCase()
+      const passwordMatches = authForm.password === user.password
+
+      if (!emailMatches || !passwordMatches) {
+        setAuthError('Incorrect email or password.')
+        return
+      }
     }
 
     const name = authMode === 'signup'
@@ -63,6 +113,17 @@ function App() {
     const username = authMode === 'signup'
       ? (authForm.name.trim().toLowerCase().replace(/\s+/g, '') || 'student')
       : user.username
+
+    if (authMode === 'signup') {
+      // Brand-new account: start with no logged posture score and all
+      // weekly stats/level progress/daily history at 0, rather than
+      // inheriting any previous data.
+      window.localStorage.removeItem(POSTURE_SCORE_STORAGE_KEY)
+      window.localStorage.setItem('posturable-social-friends', JSON.stringify([]))
+      resetHomeStats()
+      resetLevelProgress()
+      resetDailyHistory()
+    }
 
     setUser(prev => ({
       ...prev,
@@ -84,6 +145,7 @@ function App() {
       password: '',
       confirmPassword: ''
     })
+    setAuthError('')
   }
 
   const renderPage = () => {
@@ -123,7 +185,7 @@ function App() {
                   type="text"
                   value={authForm.name}
                   onChange={(event) => handleAuthChange('name', event.target.value)}
-                  placeholder="Maya Chen"
+                  placeholder="Your name"
                 />
               </label>
             )}
@@ -144,7 +206,7 @@ function App() {
                 type="password"
                 value={authForm.password}
                 onChange={(event) => handleAuthChange('password', event.target.value)}
-                placeholder="At least 6 characters"
+                placeholder="At least 6 characters, with a letter, number & symbol"
               />
             </label>
 
@@ -163,11 +225,20 @@ function App() {
             <button type="submit" className="primary-btn auth-submit">
               {authMode === 'login' ? 'Log in' : 'Create account'}
             </button>
+
+            {authError && <p className="auth-error">{authError}</p>}
           </form>
 
           <div className="auth-switch-row">
             <span>{authMode === 'login' ? 'New here?' : 'Already have an account?'}</span>
-            <button type="button" className="ghost-btn" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'signup' : 'login')
+                setAuthError('')
+              }}
+            >
               {authMode === 'login' ? 'Create account' : 'Log in'}
             </button>
           </div>

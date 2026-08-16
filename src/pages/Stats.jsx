@@ -8,6 +8,7 @@ import ach5 from '../assets/ach5.png'
 import ach6 from '../assets/ach6.png'
 import ach7 from '../assets/ach7.png'
 import ach8 from '../assets/ach8.png'
+import { getLast7DaysSummary, loadDailyHistory } from '../utils/homeStats'
 
 const assetModules = import.meta.glob('../assets/*.{png,jpg,jpeg,webp,svg}', {
   eager: true,
@@ -83,33 +84,80 @@ function AchievementIcon({ type }) {
 
 export default function Stats() {
   const [selectedTab, setSelectedTab] = useState('posture')
+  const [last7Days] = useState(() => getLast7DaysSummary())
+
+  const formatStudyTime = (minutes) => {
+    if (!minutes) return '0m'
+    const hrs = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`
+  }
+
+  const totalStudyMinutes = last7Days.reduce((sum, day) => sum + day.studyMinutes, 0)
+  const totalBreaksTaken = last7Days.reduce((sum, day) => sum + day.breaksTaken, 0)
+  const postureDays = last7Days.filter(day => day.postureAvg > 0)
+  const averagePosture = postureDays.length
+    ? Math.round(postureDays.reduce((sum, day) => sum + day.postureAvg, 0) / postureDays.length)
+    : 0
+  let streak = 0
+
+  for (const day of [...last7Days].reverse()) {
+    if (day.studyMinutes === 0) break
+    streak += 1
+  }
+
+  const allHistory = loadDailyHistory()
+  const allHistoryEntries = Object.entries(allHistory)
+    .map(([day, value]) => ({
+      date: day,
+      studyMinutes: value?.studyMinutes || 0,
+      breaksTaken: value?.breaksTaken || 0,
+      postureAvg: Array.isArray(value?.postureSamples) && value.postureSamples.length > 0
+        ? Math.round(value.postureSamples.reduce((sum, score) => sum + score, 0) / value.postureSamples.length)
+        : 0
+    }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+
+  let longStreak = 0
+  for (const entry of [...allHistoryEntries].reverse()) {
+    if (entry.studyMinutes === 0) break
+    longStreak += 1
+  }
+
+  const studyDays = last7Days.filter(day => day.studyMinutes > 0).length
+  const hasAnySession = last7Days.some(day => day.studyMinutes > 0)
+  const isPerfectWeek = last7Days.length === 7 && last7Days.every(day => day.postureAvg >= 85)
 
   const statsData = [
-    { label: 'Study Time', value: '1h 32m', unit: 'total focus', icon: 'book' },
-    { label: 'Avg Posture', value: '82', unit: 'out of 100', icon: 'target' },
-    { label: 'Total Breaks', value: '12', unit: 'rest periods', icon: 'spark' },
-    { label: 'Streak', value: '6d', unit: 'current streak', icon: 'flame' },
+    { label: 'Study Time', value: formatStudyTime(totalStudyMinutes), unit: 'last 7 days', icon: 'book' },
+    { label: 'Avg Posture', value: String(averagePosture), unit: averagePosture > 0 ? 'out of 100 · last 7 days' : 'no sessions yet', icon: 'target' },
+    { label: 'Total Breaks', value: String(totalBreaksTaken), unit: 'last 7 days', icon: 'spark' },
+    { label: 'Streak', value: `${streak}d`, unit: 'last 7 days', icon: 'flame' },
   ]
 
   const achievements = [
-    { img: getAchievementImage('Week Warrior', ach1), title: 'Week Warrior', desc: '6-day streak' },
-    { img: getAchievementImage('Study Master', ach2), title: 'Study Master', desc: '90+ minutes studied' },
-    { img: getAchievementImage('Month Master', ach3), title: 'Month Master', desc: '30-day streak' },
-    { img: getAchievementImage('Posture Pro', ach4), title: 'Posture Pro', desc: '80+ avg score' },
-    { img: getAchievementImage('Break Taker', ach5), title: 'Break Taker', desc: '12 breaks taken' },
-    { img: getAchievementImage('Consistent', ach6), title: 'Consistent', desc: 'Study 5 days/wk' },
-    { img: getAchievementImage('Early Bird', ach7), title: 'Early Bird', desc: 'First session' },
-    { img: getAchievementImage('Perfect Week', ach8), title: 'Perfect Week', desc: 'Posture ≥85 all week' },
+    { img: getAchievementImage('Week Warrior', ach1), title: 'Week Warrior', desc: '6-day streak', unlocked: streak >= 6 },
+    { img: getAchievementImage('Study Master', ach2), title: 'Study Master', desc: '90+ minutes studied', unlocked: totalStudyMinutes >= 90 },
+    { img: getAchievementImage('Month Master', ach3), title: 'Month Master', desc: '30-day streak', unlocked: longStreak >= 30 },
+    { img: getAchievementImage('Posture Pro', ach4), title: 'Posture Pro', desc: '80+ avg score', unlocked: averagePosture >= 80 },
+    { img: getAchievementImage('Break Taker', ach5), title: 'Break Taker', desc: '12 breaks taken', unlocked: totalBreaksTaken >= 12 },
+    { img: getAchievementImage('Consistent', ach6), title: 'Consistent', desc: 'Study 5 days/wk', unlocked: studyDays >= 5 },
+    { img: getAchievementImage('Early Bird', ach7), title: 'Early Bird', desc: 'First session', unlocked: hasAnySession },
+    { img: getAchievementImage('Perfect Week', ach8), title: 'Perfect Week', desc: 'Posture ≥85 all week', unlocked: isPerfectWeek },
   ]
 
   const weeklyData = {
-    posture: [74, 81, 78, 85, 82, 88, 80],
-    study: [35, 48, 52, 60, 58, 68, 72],
-    breaks: [2, 1, 3, 2, 1, 2, 1],
+    posture: last7Days.map(day => day.postureAvg),
+    study: last7Days.map(day => day.studyMinutes),
+    breaks: last7Days.map(day => day.breaksTaken),
   }
 
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const maxValue = selectedTab === 'breaks' ? 3 : 100
+  const days = last7Days.map(day => day.dayLabel)
+  const maxValue = selectedTab === 'breaks'
+    ? Math.max(3, ...weeklyData.breaks)
+    : selectedTab === 'study'
+      ? Math.max(60, ...weeklyData.study)
+      : 100
   const points = weeklyData[selectedTab]
     .map((value, idx) => {
       const x = 40 + idx * 45 + 22.5
@@ -208,19 +256,24 @@ export default function Stats() {
         <h3 className="section-title">Achievements</h3>
 
         <div className="achievements-grid">
-          {achievements.map((achievement, idx) => (
-            <div key={idx} className="achievement-card">
-              <div className="achievement-emoji">
-                {achievement.img ? (
-                  <img src={achievement.img} alt={achievement.title} className="achievement-img" />
-                ) : (
-                  <AchievementIcon type={achievement.type} />
-                )}
+          {achievements.map((achievement, idx) => {
+            const isUnlocked = achievement.unlocked
+
+            return (
+              <div key={idx} className={`achievement-card ${isUnlocked ? 'unlocked' : 'locked'}`}>
+                <div className="achievement-emoji">
+                  {achievement.img ? (
+                    <img src={achievement.img} alt={achievement.title} className="achievement-img" />
+                  ) : (
+                    <AchievementIcon type={achievement.type} />
+                  )}
+                </div>
+                <div className="achievement-title">{achievement.title}</div>
+                <div className="achievement-desc">{isUnlocked ? achievement.desc : 'Locked'}</div>
+                <span className="achievement-status">{isUnlocked ? 'Unlocked' : 'Locked'}</span>
               </div>
-              <div className="achievement-title">{achievement.title}</div>
-              <div className="achievement-desc">{achievement.desc}</div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
