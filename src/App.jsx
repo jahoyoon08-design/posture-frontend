@@ -22,13 +22,7 @@ const defaultUser = {
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home')
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    try {
-      return window.localStorage.getItem('posturable-auth') === 'true'
-    } catch {
-      return false
-    }
-  })
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authMode, setAuthMode] = useState('login')
   const [user, setUser] = useState(() => {
     try {
