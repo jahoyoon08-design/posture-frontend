@@ -93,6 +93,11 @@
   gap: 12px;
 }
 
+/* Home page only has 3 stat boxes, so let them fill the row evenly. */
+.home-stats .stats-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .stat-item {
   background: var(--bg);
   border-radius: 12px;
@@ -184,6 +189,9 @@
 @media (max-width: 640px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .home-stats .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
   .xp-bar { width: 160px; }
 }

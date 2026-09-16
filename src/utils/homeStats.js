@@ -1,4 +1,4 @@
-// Shared weekly home-page stats (streak, study time, breaks, focus lapses).
+// Shared weekly home-page stats (streak, study time, breaks, reps).
 // Persisted in localStorage and reset automatically at the start of each new
 // week (Monday), so both brand-new users and existing users always see
 // values scoped to "this week".
@@ -8,7 +8,7 @@ const DEFAULT_STATS = {
   streak: 0,
   studyMinutes: 0,
   breaksTaken: 0,
-  focusLapses: 0,
+  reps: 0,
   lastActiveDate: null
 }
 
@@ -36,6 +36,10 @@ export function loadHomeStats() {
 
   if (!stats || typeof stats !== 'object' || stats.weekStart !== currentWeekStart) {
     stats = { ...DEFAULT_STATS, weekStart: currentWeekStart }
+    window.localStorage.setItem(HOME_STATS_STORAGE_KEY, JSON.stringify(stats))
+  } else if (typeof stats.reps !== 'number') {
+    // Back-fill older stored stats that predate the reps stat.
+    stats = { ...stats, reps: 0 }
     window.localStorage.setItem(HOME_STATS_STORAGE_KEY, JSON.stringify(stats))
   }
 
@@ -104,6 +108,24 @@ export function updateLevelProgress(updater) {
 // Clears stored level/XP progress, used when a brand-new account is created.
 export function resetLevelProgress() {
   window.localStorage.removeItem(LEVEL_PROGRESS_STORAGE_KEY)
+}
+
+export const XP_PER_LEVEL = 100
+export const XP_PER_STUDY_SESSION = 5
+export const XP_PER_STUDY_MINUTE = 1
+export const XP_PER_BREAK = 2
+
+// Adds XP to the stored level progress, rolling over into new levels at 100 XP each.
+export function awardXp(amount) {
+  return updateLevelProgress(({ level, xp }) => {
+    let nextLevel = level
+    let nextXp = xp + amount
+    while (nextXp >= XP_PER_LEVEL) {
+      nextXp -= XP_PER_LEVEL
+      nextLevel += 1
+    }
+    return { level: nextLevel, xp: nextXp }
+  })
 }
 
 // Per-day history (study minutes, breaks, posture samples) so the Stats page

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import '../styles/pages.css'
+import { loadDailyHistory } from '../utils/homeStats'
+import { POSTURE_STATUS_DEDUCTIONS, analyzePosture, loadMediapipePose } from '../utils/posturePose'
+import { MdMenuBook, MdAccessTime, MdPause, MdPlayArrow } from 'react-icons/md'
 
 const STORAGE_KEYS = {
   rooms: 'posturable-social-study-rooms',
@@ -97,7 +100,6 @@ export default function Social({ user }) {
   const [roomMembersModal, setRoomMembersModal] = useState(null)
   const [roomPreviewModal, setRoomPreviewModal] = useState(null)
   const [roomName, setRoomName] = useState('')
-  const roomVideoRef = useRef(null)
 
   const studyBuddies = [
     {
@@ -250,10 +252,9 @@ export default function Social({ user }) {
       id: Date.now(),
       name: roomName.trim(),
       creator: user?.displayName || 'You',
-      studying: 1,
+      studying: 0,
       participants: [
-        { name: user?.displayName || 'You', posture: '0', status: 'Online', studyTime: '0m' },
-        { name: 'Alex Chen', posture: '88', status: 'Studying', studyTime: '145m' }
+        { name: 'You', posture: '0', status: 'Online', studyTime: '0m' }
       ]
     }
 
@@ -262,15 +263,186 @@ export default function Social({ user }) {
     setShowCreateModal(false)
   }
 
-  const liveRoomUserStats = useMemo(() => {
-    const savedScore = Number(window.localStorage.getItem('posturable-posture-score'))
-    const postureScore = Number.isFinite(savedScore) && savedScore > 0 ? savedScore : 0
+  const [isRoomTimerRunning, setIsRoomTimerRunning] = useState(true)
+  const [roomElapsedSeconds, setRoomElapsedSeconds] = useState(0)
+  const [currentStreakSeconds, setCurrentStreakSeconds] = useState(0)
+  const [todayBaselineSeconds, setTodayBaselineSeconds] = useState(0)
+  const [memberElapsedSeconds, setMemberElapsedSeconds] = useState({})
 
-    return {
-      postureScore,
-      studyTime: '0m'
+  const parseMinutesLabel = (label) => {
+    const match = /\d+/.exec(label || '')
+    return match ? Number(match[0]) * 60 : 0
+  }
+
+  // Reset the focus timer and seed each member's elapsed time whenever a room is joined.
+  useEffect(() => {
+    if (!roomPreviewModal) return
+
+    setIsRoomTimerRunning(true)
+    setRoomElapsedSeconds(0)
+    setCurrentStreakSeconds(0)
+
+    const todayKey = new Date().toISOString().slice(0, 10)
+    setTodayBaselineSeconds((loadDailyHistory()[todayKey]?.studyMinutes || 0) * 60)
+
+    const seeded = {}
+    ;(roomPreviewModal.participants || []).forEach((person) => {
+      if (person.name !== 'You') seeded[person.name] = parseMinutesLabel(person.studyTime)
+    })
+    setMemberElapsedSeconds(seeded)
+  }, [roomPreviewModal])
+
+  // Tick every second: your timer only while running, other "Studying" members always.
+  useEffect(() => {
+    if (!roomPreviewModal) return undefined
+
+    const interval = setInterval(() => {
+      if (isRoomTimerRunning) {
+        setRoomElapsedSeconds((prev) => prev + 1)
+        setCurrentStreakSeconds((prev) => prev + 1)
+      }
+      setMemberElapsedSeconds((prev) => {
+        const next = { ...prev }
+        ;(roomPreviewModal.participants || []).forEach((person) => {
+          if (person.name !== 'You' && person.status === 'Studying') {
+            next[person.name] = (next[person.name] || 0) + 1
+          }
+        })
+        return next
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [roomPreviewModal, isRoomTimerRunning])
+
+  const toggleRoomTimer = () => {
+    if (isRoomTimerRunning) {
+      setIsRoomTimerRunning(false)
+    } else {
+      setIsRoomTimerRunning(true)
+      setCurrentStreakSeconds(0)
     }
-  }, [roomPreviewModal, user])
+  }
+
+  const roomVideoRef = useRef(null)
+  const roomPoseRef = useRef(null)
+  const roomCameraStreamRef = useRef(null)
+  const roomScoreSamplesRef = useRef([])
+  const roomLastStatusUpdateRef = useRef(0)
+  const [roomPostureScore, setRoomPostureScore] = useState(100)
+
+  // Start the same MediaPipe posture tracking as the Study page while the room is open.
+  useEffect(() => {
+    if (!roomPreviewModal) return undefined
+
+    let stopped = false
+    setRoomPostureScore(100)
+    roomScoreSamplesRef.current = []
+    roomLastStatusUpdateRef.current = 0
+
+    const onResults = (results) => {
+      const lm = results.poseLandmarks || []
+      if (!lm.length) return
+      const status = analyzePosture(lm)
+      const now = Date.now()
+      if (status && now - roomLastStatusUpdateRef.current >= 1000) {
+        roomLastStatusUpdateRef.current = now
+        const deduction = POSTURE_STATUS_DEDUCTIONS[status] ?? 0
+        roomScoreSamplesRef.current.push(100 - deduction)
+      }
+    }
+
+    const start = async () => {
+      try {
+        const Pose = await loadMediapipePose()
+        const pose = new Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        })
+        pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        })
+        pose.onResults(onResults)
+        roomPoseRef.current = pose
+
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        if (stopped) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+        roomCameraStreamRef.current = stream
+        const video = roomVideoRef.current
+        if (!video) return
+        video.srcObject = stream
+        await video.play()
+
+        const frameLoop = async () => {
+          if (stopped || !roomPoseRef.current || !video.srcObject) return
+          try {
+            await roomPoseRef.current.send({ image: video })
+          } catch {
+            // ignore per-frame errors
+          }
+          requestAnimationFrame(frameLoop)
+        }
+        requestAnimationFrame(frameLoop)
+      } catch (err) {
+        console.error('Failed to start room posture tracking', err)
+      }
+    }
+
+    start()
+
+    return () => {
+      stopped = true
+      if (roomPoseRef.current && roomPoseRef.current.close) roomPoseRef.current.close()
+      roomPoseRef.current = null
+      if (roomCameraStreamRef.current) {
+        roomCameraStreamRef.current.getTracks().forEach((track) => track.stop())
+        roomCameraStreamRef.current = null
+      }
+      if (roomVideoRef.current) {
+        try {
+          roomVideoRef.current.pause()
+          roomVideoRef.current.srcObject = null
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    }
+  }, [roomPreviewModal])
+
+  // Average the collected samples into a fresh score every 5 seconds.
+  useEffect(() => {
+    if (!roomPreviewModal) return undefined
+
+    const interval = setInterval(() => {
+      const samples = roomScoreSamplesRef.current
+      if (samples.length === 0) return
+      const average = Math.round(samples.reduce((sum, s) => sum + s, 0) / samples.length)
+      roomScoreSamplesRef.current = []
+      setRoomPostureScore(average)
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [roomPreviewModal])
+
+  const formatHMS = (totalSeconds) => {
+    const hrs = Math.floor(totalSeconds / 3600)
+    const mins = Math.floor((totalSeconds % 3600) / 60)
+    const secs = totalSeconds % 60
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const roomMembersForGrid = roomPreviewModal
+    ? (roomPreviewModal.participants || []).map((person) => person.name === 'You'
+      ? { name: user?.displayName || 'You', active: isRoomTimerRunning, seconds: roomElapsedSeconds, isYou: true, score: roomPostureScore }
+      : { name: person.name, active: person.status === 'Studying', seconds: memberElapsedSeconds[person.name] || 0, isYou: false })
+    : []
+
+  const activeMemberCount = roomMembersForGrid.filter((member) => member.active).length
 
   const filteredPeople = searchTerm.trim()
     ? people
@@ -309,45 +481,12 @@ export default function Social({ user }) {
         })
     : []
 
-  useEffect(() => {
-    if (!roomPreviewModal) return
-
-    let stream = null
-
-    const startCamera = async () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return
-      }
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        if (roomVideoRef.current) {
-          roomVideoRef.current.srcObject = stream
-        }
-      } catch {
-        if (roomVideoRef.current) {
-          roomVideoRef.current.poster = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="50%" fill="white" text-anchor="middle" font-size="32" font-family="Arial">Camera unavailable</text></svg>')
-        }
-      }
-    }
-
-    startCamera()
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
-      }
-    }
-  }, [roomPreviewModal])
-
   return (
     <div className="page social-page">
       <div className="page-header">
         <div>
           <h1>Posturable</h1>
-          <p className="page-title">Social</p>
         </div>
-        <p className="social-subtitle">Study with friends</p>
       </div>
 
       <div className="social-section">
@@ -562,36 +701,45 @@ export default function Social({ user }) {
               <button type="button" className="ghost-btn" onClick={handleLeaveRoom}>Leave</button>
             </div>
 
-            <div className="room-preview-layout">
-              <div className="webcam-panel">
-                <video ref={roomVideoRef} autoPlay muted playsInline className="webcam-video" />
-                <div className="webcam-label">Your webcam</div>
-              </div>
+            <video ref={roomVideoRef} playsInline muted style={{ display: 'none' }} />
 
-              <div className="room-live-sidebar">
-                <div className="posture-panel">
-                  <div className="posture-score-label">Your posture score</div>
-                  <div className="posture-score-value">{liveRoomUserStats.postureScore}</div>
-                  <div className="posture-user">{user?.displayName || 'You'}</div>
-                  <div className="posture-meta">{liveRoomUserStats.studyTime} studying</div>
-                </div>
+            <div className="room-focus-timer">
+              <span className="room-focus-clock">{formatHMS(roomElapsedSeconds)}</span>
+              <button
+                type="button"
+                className="room-focus-toggle"
+                onClick={toggleRoomTimer}
+                aria-label={isRoomTimerRunning ? 'Pause timer' : 'Resume timer'}
+              >
+                {isRoomTimerRunning ? <MdPause size={20} /> : <MdPlayArrow size={20} />}
+              </button>
+            </div>
 
-                <div className="room-live-members">
-                  {(roomPreviewModal.participants || []).filter(person => person.name !== 'You').map((person, index) => (
-                    <div key={`${person.name}-${index}`} className="live-member-row">
-                      <div className="member-avatar small">{person.name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()}</div>
-                      <div className="member-info">
-                        <div className="member-name">{person.name}</div>
-                        <div className="member-status">{person.status}</div>
-                      </div>
-                      <div className="member-stats">
-                        <span className="member-score">{person.posture || '0'}</span>
-                        <span className="member-time">{person.studyTime || '0m'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="room-focus-stats">
+              <div className="room-focus-stat">
+                <span className="room-focus-stat-label">Today</span>
+                <span className="room-focus-stat-value">{formatHMS(todayBaselineSeconds + roomElapsedSeconds)}</span>
               </div>
+              <div className="room-focus-stat">
+                <span className="room-focus-stat-label">Current focus</span>
+                <span className="room-focus-stat-value">{formatHMS(currentStreakSeconds)}</span>
+              </div>
+            </div>
+
+            <div className="room-ranking-row">
+              <span className="room-ranking-count">{activeMemberCount}/{roomMembersForGrid.length}</span>
+              <span className="room-ranking-name">{roomPreviewModal.name}</span>
+            </div>
+
+            <div className="room-members-grid">
+              {roomMembersForGrid.map((member) => (
+                <div key={member.name} className={`room-member-card ${member.active ? 'active' : 'idle'}`}>
+                  {member.active ? <MdMenuBook size={26} /> : <MdAccessTime size={26} />}
+                  <span className="room-member-card-name">{member.name}</span>
+                  {member.isYou && <span className="room-member-card-score">{member.score}</span>}
+                  <span className="room-member-card-time">{formatHMS(member.seconds)}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

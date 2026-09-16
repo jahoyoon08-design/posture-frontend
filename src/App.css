@@ -2142,12 +2142,6 @@ html, body, #root {
   font-weight: 700;
 }
 
-.member-avatar.small {
-  width: 28px;
-  height: 28px;
-  font-size: 9px;
-}
-
 .member-info {
   flex: 1;
 }
@@ -2169,24 +2163,6 @@ html, body, #root {
   color: var(--primary);
 }
 
-.member-stats {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  text-align: right;
-}
-
-.member-score, .member-time {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.member-time {
-  color: var(--text-light);
-}
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -2205,98 +2181,120 @@ html, body, #root {
   gap: 12px;
 }
 
-.room-preview-layout {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 14px;
-  align-items: stretch;
-}
-
-.room-live-sidebar {
-  display: grid;
+.room-focus-timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 12px;
+  padding: 18px 0 4px;
 }
 
-.webcam-panel {
-  background: #0f172a;
-  border-radius: 14px;
-  overflow: hidden;
-  position: relative;
-  min-height: 220px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+.room-focus-clock {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
-.webcam-video {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-height: 220px;
-  object-fit: cover;
-  background: #0f172a;
+.room-focus-toggle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text);
+  cursor: pointer;
 }
 
-.webcam-label {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  background: rgba(15, 23, 42, 0.75);
-  color: white;
-  font-size: 11px;
-  padding: 6px 8px;
-  border-radius: 999px;
+.room-focus-stats {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--border);
 }
 
-.posture-panel {
+.room-focus-stat {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  gap: 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px 12px;
-  text-align: center;
+  gap: 4px;
 }
 
-.posture-score-label {
+.room-focus-stat-label {
   font-size: 12px;
   color: var(--text-light);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
-.posture-score-value {
-  font-size: 42px;
+.room-focus-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.room-ranking-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 0 10px;
+}
+
+.room-ranking-count {
+  font-size: 15px;
   font-weight: 800;
-  color: var(--primary);
-  line-height: 1;
+  color: #f97316;
 }
 
-.posture-user {
+.room-ranking-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
 
-.posture-meta {
-  font-size: 12px;
+.room-members-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.room-member-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
   color: var(--text-light);
 }
 
-.room-live-members {
-  display: grid;
-  gap: 8px;
+.room-member-card.active {
+  color: #f97316;
 }
 
-.live-member-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
+.room-member-card-name {
+  font-size: 11px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-member-card-score {
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.room-member-card-time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .video-card {

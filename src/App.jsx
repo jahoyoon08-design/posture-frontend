@@ -22,13 +22,7 @@ const defaultUser = {
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home')
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    try {
-      return window.localStorage.getItem('posturable-auth') === 'true'
-    } catch {
-      return false
-    }
-  })
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authMode, setAuthMode] = useState('login')
   const [user, setUser] = useState(() => {
     try {
@@ -148,12 +142,12 @@ function App() {
     setAuthError('')
   }
 
-  const renderPage = () => {
+  // Study keeps its own live camera/timer session, so it stays mounted (just hidden)
+  // instead of unmounting like the other pages, which is why it isn't included here.
+  const renderOtherPage = () => {
     switch (currentPage) {
       case 'home':
         return <Home user={user} onOpenSettings={() => setCurrentPage('settings')} />
-      case 'study':
-        return <Study />
       case 'stats':
         return <Stats />
       case 'stretches':
@@ -163,7 +157,7 @@ function App() {
       case 'settings':
         return <Settings user={user} onUpdateUser={setUser} onLogout={handleLogout} />
       default:
-        return <Home user={user} onOpenSettings={() => setCurrentPage('settings')} />
+        return null
     }
   }
 
@@ -250,7 +244,10 @@ function App() {
   return (
     <div className="app-container">
       <main className="app-content">
-        {renderPage()}
+        <div style={{ display: currentPage === 'study' ? 'contents' : 'none' }}>
+          <Study />
+        </div>
+        {currentPage !== 'study' && renderOtherPage()}
       </main>
 
       <nav className="bottom-nav">

@@ -11,17 +11,13 @@ export default function Home({ user, onOpenSettings }) {
   })
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()
   const [weeklyStats] = useState(() => loadHomeStats())
-  const { streak, studyMinutes: studyTime, breaksTaken, focusLapses } = weeklyStats
+  const { streak, studyMinutes: studyTime, breaksTaken } = weeklyStats
   const [levelProgress] = useState(() => loadLevelProgress())
   const { level, xp } = levelProgress
   const levelName = getLevelName(level)
   const [xpToNext] = useState(100)
   const [showXpInfo, setShowXpInfo] = useState(false)
   const [showPostureInfo, setShowPostureInfo] = useState(false)
-
-  const xpPerStudy = 5
-  const xpPerBreak = 2
-  const xpPerMinute = 1
 
   const getPostureStatus = (score) => {
     if (!hasPostureScore) return 'No sessions yet'
@@ -120,11 +116,6 @@ export default function Home({ user, onOpenSettings }) {
             <span className="stat-label">Breaks (week)</span>
             <span className="stat-value">{breaksTaken}</span>
             <span className="stat-sub">taken</span>
-          </div>
-
-          <div className="stat-item">
-            <span className="stat-label">Focus Lapses (week)</span>
-            <span className="stat-value">{focusLapses}</span>
           </div>
         </div>
 
