@@ -128,6 +128,13 @@ export default function Stats() {
   const hasAnySession = last7Days.some(day => day.studyMinutes > 0)
   const isPerfectWeek = last7Days.length === 7 && last7Days.every(day => day.postureAvg >= 85)
 
+  let posturePro14DayStreak = 0
+  for (const entry of [...allHistoryEntries].reverse()) {
+    if (entry.postureAvg < 80) break
+    posturePro14DayStreak += 1
+  }
+  const isPosturePro = posturePro14DayStreak >= 14
+
   const statsData = [
     { label: 'Study Time', value: formatStudyTime(totalStudyMinutes), unit: 'last 7 days', icon: 'book' },
     { label: 'Avg Posture', value: String(averagePosture), unit: averagePosture > 0 ? 'out of 100 · last 7 days' : 'no sessions yet', icon: 'target' },
@@ -139,7 +146,7 @@ export default function Stats() {
     { img: getAchievementImage('Week Warrior', ach1), title: 'Week Warrior', desc: '6-day streak', unlocked: streak >= 6 },
     { img: getAchievementImage('Study Master', ach2), title: 'Study Master', desc: '90+ minutes studied', unlocked: totalStudyMinutes >= 90 },
     { img: getAchievementImage('Month Master', ach3), title: 'Month Master', desc: '30-day streak', unlocked: longStreak >= 30 },
-    { img: getAchievementImage('Posture Pro', ach4), title: 'Posture Pro', desc: '80+ avg score', unlocked: averagePosture >= 80 },
+    { img: getAchievementImage('Posture Pro', ach4), title: 'Posture Pro', desc: '80+ score for 14 days straight', unlocked: isPosturePro },
     { img: getAchievementImage('Break Taker', ach5), title: 'Break Taker', desc: '12 breaks taken', unlocked: totalBreaksTaken >= 12 },
     { img: getAchievementImage('Consistent', ach6), title: 'Consistent', desc: 'Study 5 days/wk', unlocked: studyDays >= 5 },
     { img: getAchievementImage('Early Bird', ach7), title: 'Early Bird', desc: 'First session', unlocked: hasAnySession },
@@ -260,7 +267,11 @@ export default function Stats() {
             const isUnlocked = achievement.unlocked
 
             return (
-              <div key={idx} className={`achievement-card ${isUnlocked ? 'unlocked' : 'locked'}`}>
+              <div
+                key={idx}
+                className={`achievement-card ${isUnlocked ? 'unlocked' : 'locked'}`}
+                title={isUnlocked ? `${achievement.title}: ${achievement.desc}` : `How to unlock: ${achievement.desc}`}
+              >
                 <div className="achievement-emoji">
                   {achievement.img ? (
                     <img src={achievement.img} alt={achievement.title} className="achievement-img" />
@@ -269,7 +280,7 @@ export default function Stats() {
                   )}
                 </div>
                 <div className="achievement-title">{achievement.title}</div>
-                <div className="achievement-desc">{isUnlocked ? achievement.desc : 'Locked'}</div>
+                <div className="achievement-desc">{isUnlocked ? achievement.desc : `Unlock: ${achievement.desc}`}</div>
                 <span className="achievement-status">{isUnlocked ? 'Unlocked' : 'Locked'}</span>
               </div>
             )

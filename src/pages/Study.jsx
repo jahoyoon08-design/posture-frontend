@@ -60,8 +60,12 @@ export default function Study() {
     return () => clearInterval(interval)
   }, [isRunning, timeLeft, sessionType, workMinutes, breakMinutes])
 
+  // Only keep timeLeft in sync with the duration sliders before a session has
+  // started, so pausing an in-progress session doesn't reset the countdown.
+  const hasStartedRef = useRef(false)
+
   useEffect(() => {
-    if (!isRunning) {
+    if (!isRunning && !hasStartedRef.current) {
       setTimeLeft(totalSeconds)
     }
   }, [totalSeconds, isRunning])
@@ -80,10 +84,12 @@ export default function Study() {
         startCamera()
       }
     }
+    if (startingUp) hasStartedRef.current = true
     setIsRunning(prev => !prev)
   }
 
   const resetSession = () => {
+    hasStartedRef.current = false
     setIsRunning(false)
     setSessionType('work')
     setTimeLeft(workMinutes * 60)
@@ -283,6 +289,10 @@ export default function Study() {
         videoRef.current.load()
       } catch (e) {}
     }
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d')
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    }
   }
 
   const pauseTimerForCameraIssue = (message) => {
@@ -341,7 +351,12 @@ export default function Study() {
               title="Timer settings"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 7h16M4 12h10M4 17h16" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </button>
           )}
@@ -443,16 +458,18 @@ export default function Study() {
         </div>
 
         <div className="camera-box" title="Posture tracking">
-          <div className={`camera-area ${blurCamera ? 'blurred' : ''}`}>
+          <div className={`camera-area ${!tracking || blurCamera ? 'blurred' : ''}`}>
             <video ref={videoRef} className="camera-video" playsInline></video>
             <canvas ref={canvasRef} className="camera-canvas"></canvas>
-            <button
-              id="blur-camera"
-              className={`blur-toggle-btn ${blurCamera ? 'active' : ''}`}
-              onClick={() => setBlurCamera(prev => !prev)}
-            >
-              {blurCamera ? 'Unblur' : 'Blur'}
-            </button>
+            {tracking && (
+              <button
+                id="blur-camera"
+                className={`blur-toggle-btn ${blurCamera ? 'active' : ''}`}
+                onClick={() => setBlurCamera(prev => !prev)}
+              >
+                {blurCamera ? 'Unblur' : 'Blur'}
+              </button>
+            )}
           </div>
 
           {cameraError && <div className="camera-error">{cameraError}</div>}
