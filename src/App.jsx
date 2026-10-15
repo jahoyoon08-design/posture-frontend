@@ -9,7 +9,7 @@ import Settings from './pages/Settings'
 import studyIcon from './assets/study icon.png'
 import stretchIcon from './assets/stretch-icon.png'
 import { MdHome, MdMenuBook, MdBarChart, MdFitnessCenter, MdPeople } from 'react-icons/md'
-import { POSTURE_SCORE_STORAGE_KEY } from './pages/Study'
+import { POSTURE_SCORE_STORAGE_KEY, POSTURE_SCORE_DATE_STORAGE_KEY } from './pages/Study'
 import { resetHomeStats, resetLevelProgress, resetDailyHistory } from './utils/homeStats'
 
 const defaultUser = {
@@ -20,9 +20,17 @@ const defaultUser = {
   avatar: ''
 }
 
+const REGISTERED_USERS_STORAGE_KEY = 'posturable-users'
+
 function App() {
   const [currentPage, setCurrentPage] = useState('home')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    try {
+      return window.localStorage.getItem('posturable-auth') === 'true'
+    } catch {
+      return false
+    }
+  })
   const [authMode, setAuthMode] = useState('login')
   const [user, setUser] = useState(() => {
     try {
@@ -44,6 +52,24 @@ function App() {
     window.localStorage.setItem('posturable-user', JSON.stringify(user))
     window.localStorage.setItem('posturable-auth', String(isAuthenticated))
   }, [user, isAuthenticated])
+
+  useEffect(() => {
+    if (!user?.id) return
+
+    try {
+      const registeredUsers = JSON.parse(window.localStorage.getItem(REGISTERED_USERS_STORAGE_KEY) || '[]')
+      if (!Array.isArray(registeredUsers)) return
+
+      const updatedUsers = registeredUsers.map((registeredUser) =>
+        registeredUser.id === user.id
+          ? { ...registeredUser, displayName: user.displayName, username: user.username }
+          : registeredUser
+      )
+      window.localStorage.setItem(REGISTERED_USERS_STORAGE_KEY, JSON.stringify(updatedUsers))
+    } catch {
+      // Keep profile edits working if the local directory is unavailable.
+    }
+  }, [user])
 
   const handleAuthChange = (field, value) => {
     setAuthForm(prev => ({ ...prev, [field]: value }))
@@ -107,20 +133,34 @@ function App() {
     const username = authMode === 'signup'
       ? (authForm.name.trim().toLowerCase().replace(/\s+/g, '') || 'student')
       : user.username
+    const registeredUserId = authMode === 'signup'
+      ? (window.crypto?.randomUUID?.() || `user-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      : user.id
 
     if (authMode === 'signup') {
       // Brand-new account: start with no logged posture score and all
       // weekly stats/level progress/daily history at 0, rather than
       // inheriting any previous data.
       window.localStorage.removeItem(POSTURE_SCORE_STORAGE_KEY)
+      window.localStorage.removeItem(POSTURE_SCORE_DATE_STORAGE_KEY)
       window.localStorage.setItem('posturable-social-friends', JSON.stringify([]))
       resetHomeStats()
       resetLevelProgress()
       resetDailyHistory()
+
+      try {
+        const storedUsers = JSON.parse(window.localStorage.getItem(REGISTERED_USERS_STORAGE_KEY) || '[]')
+        const registeredUsers = Array.isArray(storedUsers) ? storedUsers : []
+        registeredUsers.push({ id: registeredUserId, displayName: name, username })
+        window.localStorage.setItem(REGISTERED_USERS_STORAGE_KEY, JSON.stringify(registeredUsers))
+      } catch {
+        // Do not block account creation if the local directory cannot be saved.
+      }
     }
 
     setUser(prev => ({
       ...prev,
+      id: registeredUserId,
       displayName: name,
       username,
       email: authForm.email.trim() || prev.email,

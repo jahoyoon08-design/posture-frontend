@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import '../styles/pages.css'
-import { updateHomeStats, addDailyActivity, addDailyPostureSample, awardXp, XP_PER_STUDY_SESSION, XP_PER_STUDY_MINUTE, XP_PER_BREAK } from '../utils/homeStats'
+import { updateHomeStats, addDailyActivity, addDailyPostureSample, awardXp, getLocalDateISO, XP_PER_STUDY_SESSION, XP_PER_STUDY_MINUTE, XP_PER_BREAK } from '../utils/homeStats'
 import { POSTURE_STATUS_DEDUCTIONS, analyzePosture, loadMediapipePose } from '../utils/posturePose'
 
 // Shared with Home.jsx so "Today's Posture Score" reflects the latest tracked value.
 export const POSTURE_SCORE_STORAGE_KEY = 'posturable-posture-score'
+export const POSTURE_SCORE_DATE_STORAGE_KEY = 'posturable-posture-score-date'
 
 export default function Study() {
   const [workMinutes, setWorkMinutes] = useState(25)
@@ -37,12 +38,19 @@ export default function Study() {
         setSessionType('break')
         setTimeLeft(breakMinutes * 60)
         updateHomeStats(stats => {
-          const today = new Date().toISOString().slice(0, 10)
-          const isNewDay = stats.lastActiveDate !== today
+          const today = getLocalDateISO()
+          const yesterday = new Date()
+          yesterday.setDate(yesterday.getDate() - 1)
+          const yesterdayISO = getLocalDateISO(yesterday)
+          const nextStreak = stats.lastActiveDate === today
+            ? stats.streak
+            : stats.lastActiveDate === yesterdayISO
+              ? stats.streak + 1
+              : 1
           return {
             ...stats,
             studyMinutes: stats.studyMinutes + workMinutes,
-            streak: isNewDay ? stats.streak + 1 : stats.streak,
+            streak: nextStreak,
             lastActiveDate: today
           }
         })
@@ -110,6 +118,7 @@ export default function Study() {
   const poseRef = useRef(null)
   const lastStatusUpdateRef = useRef(0)
   const scoreSamplesRef = useRef([])
+  const postureStatusSamplesRef = useRef([])
   const scoreHistoryRef = useRef([])
   const wasGoodPostureRef = useRef(true)
   const [postureStatus, setPostureStatus] = useState('Camera ready')
@@ -117,8 +126,9 @@ export default function Study() {
   const [cameraError, setCameraError] = useState('')
   const [blurCamera, setBlurCamera] = useState(false)
   const [postureScore, setPostureScore] = useState(() => {
+    const isFromToday = window.localStorage.getItem(POSTURE_SCORE_DATE_STORAGE_KEY) === getLocalDateISO()
     const saved = Number(window.localStorage.getItem(POSTURE_SCORE_STORAGE_KEY))
-    return Number.isFinite(saved) && saved > 0 ? saved : 100
+    return isFromToday && Number.isFinite(saved) && saved > 0 ? saved : 100
   })
 
   // Every 2 seconds, take the posture scores sampled during that window, add their
@@ -131,7 +141,9 @@ export default function Study() {
       const samples = scoreSamplesRef.current
       if (samples.length === 0) return
       const windowAverage = samples.reduce((sum, s) => sum + s, 0) / samples.length
+      const windowStatuses = postureStatusSamplesRef.current
       scoreSamplesRef.current = []
+      postureStatusSamplesRef.current = []
 
       scoreHistoryRef.current.push(windowAverage)
       const history = scoreHistoryRef.current
@@ -139,7 +151,8 @@ export default function Study() {
 
       setPostureScore(overallAverage)
       window.localStorage.setItem(POSTURE_SCORE_STORAGE_KEY, String(overallAverage))
-      addDailyPostureSample(Math.round(windowAverage))
+      window.localStorage.setItem(POSTURE_SCORE_DATE_STORAGE_KEY, getLocalDateISO())
+      addDailyPostureSample(Math.round(windowAverage), windowStatuses)
     }, 2000)
 
     return () => clearInterval(interval)
@@ -173,6 +186,7 @@ export default function Study() {
         setPostureStatus(status)
         const deduction = POSTURE_STATUS_DEDUCTIONS[status] ?? 0
         scoreSamplesRef.current.push(100 - deduction)
+        postureStatusSamplesRef.current.push(status)
 
         // Count a "rep" each time posture is corrected from bad back to good,
         // rather than on every good sample while it stays good.
@@ -194,6 +208,7 @@ export default function Study() {
     setCameraError('')
     lastStatusUpdateRef.current = 0
     scoreSamplesRef.current = []
+    postureStatusSamplesRef.current = []
     scoreHistoryRef.current = []
     try {
       const Pose = await loadMediapipePose()

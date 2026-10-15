@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import '../styles/pages.css'
+import { loadDailyHistory } from '../utils/homeStats'
+import { POSTURE_STATUS_DEDUCTIONS } from '../utils/posturePose'
 import twistImg from '../assets/seated-spinal-twist.png'
 import forwardBendImg from '../assets/seated-forward-bend.png'
 import neckRollsImg from '../assets/neck-rolls.png'
@@ -8,13 +10,28 @@ import wristCirclesImg from '../assets/wrist-circles.png'
 import eyeExercisesImg from '../assets/eye-exercises.png'
 
 export default function Stretches() {
-  const [openedStretch, setOpenedStretch] = useState(1)
+  const [postureIssueLosses] = useState(() => {
+    const history = loadDailyHistory()
+    const fromDate = new Date()
+    fromDate.setDate(fromDate.getDate() - 6)
+    const firstTrackedDate = fromDate.toISOString().slice(0, 10)
+
+    return Object.entries(history)
+      .filter(([date]) => date >= firstTrackedDate)
+      .reduce((totals, [, entry]) => {
+        Object.entries(entry.postureIssues || {}).forEach(([status, count]) => {
+          const deduction = POSTURE_STATUS_DEDUCTIONS[status] || 0
+          if (deduction > 0) totals[status] = (totals[status] || 0) + deduction * count
+        })
+        return totals
+      }, {})
+  })
 
   const stretches = [
     {
       id: 1,
       name: 'Seated Spinal Twist',
-      recommended: true,
+      postureIssues: ['Shoulders rounded'],
       description: 'Gentle twist to mobilize the spine',
       duration: '2 minutes',
       image: twistImg,
@@ -26,7 +43,6 @@ export default function Stretches() {
     },
     {
       id: 2,
-      recommended: true,
       name: 'Seated Forward Bend',
       description: 'Stretch your back and hamstrings',
       duration: '2 minutes',
@@ -39,8 +55,14 @@ export default function Stretches() {
     },
     {
       id: 3,
-      recommended: true,
       name: 'Neck Rolls',
+      postureIssues: [
+        'Neck bent forward',
+        'Neck bent left',
+        'Neck bent right',
+        'Neck bent left forward',
+        'Neck bent right forward'
+      ],
       description: 'Release tension from your neck',
       duration: '1 minute',
       image: neckRollsImg,
@@ -53,6 +75,7 @@ export default function Stretches() {
     {
       id: 4,
       name: 'Shoulder Shrugs',
+      postureIssues: ['Shoulders rounded'],
       description: 'Loosen up your shoulder muscles',
       duration: '1 minute',
       image: shoulderShrugsImg,
@@ -88,6 +111,26 @@ export default function Stretches() {
     },
   ]
 
+  const rankedStretches = stretches
+    .map((stretch) => {
+      const reasons = (stretch.postureIssues || [])
+        .map((status) => ({ status, loss: postureIssueLosses[status] || 0 }))
+        .filter((reason) => reason.loss > 0)
+        .sort((a, b) => b.loss - a.loss)
+
+      return {
+        ...stretch,
+        recommendationScore: reasons.reduce((total, reason) => total + reason.loss, 0),
+        recommendationReason: reasons[0]?.status
+      }
+    })
+    .sort((a, b) => b.recommendationScore - a.recommendationScore || a.id - b.id)
+
+  const firstRecommendedId = rankedStretches[0]?.recommendationScore > 0
+    ? rankedStretches[0].id
+    : null
+  const [openedStretch, setOpenedStretch] = useState(firstRecommendedId ?? 1)
+
   const toggleStretch = (id) => {
     setOpenedStretch(prev => (prev === id ? null : id))
   }
@@ -105,10 +148,19 @@ export default function Stretches() {
 
       <div className="stretches-section">
         <h3 className="section-title">RECOMMENDED FOR YOU</h3>
+        {firstRecommendedId ? (
+          <p className="stretch-description">
+            Prioritized by the posture deductions you recorded this week.
+          </p>
+        ) : (
+          <p className="stretch-description">
+            Start posture tracking during a study session to get recommendations matched to your posture.
+          </p>
+        )}
 
         <div className="stretches-list">
-          {stretches.map(stretch => (
-            <div key={stretch.id} className={`stretch-card ${stretch.recommended ? 'recommended' : ''} ${openedStretch === stretch.id ? 'active' : ''}`}>
+          {rankedStretches.map(stretch => (
+            <div key={stretch.id} className={`stretch-card ${stretch.recommendationScore > 0 ? 'recommended' : ''} ${openedStretch === stretch.id ? 'active' : ''}`}>
               <button
                 type="button"
                 className="stretch-summary"
@@ -116,7 +168,13 @@ export default function Stretches() {
               >
                 <div className="stretch-info">
                   <h3 className="stretch-name">{stretch.name}</h3>
-                  {stretch.recommended && <span className="recommended-badge">Recommended</span>}
+                  {stretch.recommendationScore > 0 && (
+                    <span className="recommended-badge">
+                      {stretch.recommendationReason
+                        ? `For ${stretch.recommendationReason.toLowerCase()}`
+                        : 'Recommended'}
+                    </span>
+                  )}
                   <p className="stretch-description">{stretch.description}</p>
                 </div>
                 <div className="stretch-duration">

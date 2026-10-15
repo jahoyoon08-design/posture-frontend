@@ -7,34 +7,14 @@ import { MdMenuBook, MdAccessTime, MdPause, MdPlayArrow } from 'react-icons/md'
 const STORAGE_KEYS = {
   rooms: 'posturable-social-study-rooms',
   friends: 'posturable-social-friends',
-  joined: 'posturable-social-joined-rooms'
+  joined: 'posturable-social-joined-rooms',
+  registeredUsers: 'posturable-users'
 }
 
-const DEFAULT_ROOMS = [
-  {
-    id: 1,
-    name: 'Finals Prep Squad',
-    creator: 'Alex Chen',
-    studying: 4,
-    participants: [
-      { name: 'Alex Chen', posture: '88', status: 'Studying', studyTime: '145m' },
-      { name: 'Jordan Smith', posture: '92', status: 'Online', studyTime: '98m' },
-      { name: 'Sam Williams', posture: '85', status: 'Studying', studyTime: '210m' },
-      { name: 'You', posture: '0', status: 'Online', studyTime: '0m' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Morning Study Club',
-    creator: 'Jordan Smith',
-    studying: 2,
-    participants: [
-      { name: 'Jordan Smith', posture: '92', status: 'Online', studyTime: '98m' },
-      { name: 'Mina Patel', posture: '86', status: 'Studying', studyTime: '64m' },
-      { name: 'You', posture: '0', status: 'Online', studyTime: '0m' }
-    ]
-  },
-]
+const DEFAULT_ROOMS = []
+const REMOVED_DEFAULT_ROOM_NAMES = new Set(['Finals Prep Squad', 'Morning Study Club'])
+const REMOVED_DEFAULT_ROOM_IDS = new Set([1, 2])
+const REMOVED_DEFAULT_PERSON_IDS = new Set([1, 2, 3, 4, 5, 6, 7])
 
 const DEFAULT_FRIENDS = []
 const LEGACY_DEFAULT_FRIEND_IDS = [1, 2]
@@ -69,10 +49,17 @@ const getInitials = (name) =>
     .slice(0, 2)
     .toUpperCase()
 
+const normalizeSearchText = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+
 export default function Social({ user }) {
-  const [joinedRooms, setJoinedRooms] = useState(() => readStoredArray(STORAGE_KEYS.joined, []))
+  const [joinedRooms, setJoinedRooms] = useState(() =>
+    readStoredArray(STORAGE_KEYS.joined, []).filter((id) => !REMOVED_DEFAULT_ROOM_IDS.has(Number(id)))
+  )
   const [searchTerm, setSearchTerm] = useState('')
-  const [friends, setFriends] = useState(() => readStoredArray(STORAGE_KEYS.friends, DEFAULT_FRIENDS))
+  const [friends, setFriends] = useState(() =>
+    readStoredArray(STORAGE_KEYS.friends, DEFAULT_FRIENDS)
+      .filter((id) => !REMOVED_DEFAULT_PERSON_IDS.has(Number(id)))
+  )
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEYS.friends)
@@ -140,14 +127,28 @@ export default function Social({ user }) {
     },
   ]
 
-  const people = [
-    { id: 4, name: 'Maya Chen', username: 'maya', level: 'Lvl 4', status: 'Online' },
-    { id: 5, name: 'Mina Patel', username: 'mina', level: 'Lvl 3', status: 'Online' },
-    { id: 6, name: 'Theo Brooks', username: 'theo', level: 'Lvl 2', status: 'Offline' },
-    { id: 7, name: 'Lina Kim', username: 'lina', level: 'Lvl 4', status: 'Online' }
-  ]
+  const [people] = useState(() =>
+    readStoredArray(STORAGE_KEYS.registeredUsers, [])
+      .filter((profile) =>
+        profile &&
+        typeof profile.id === 'string' &&
+        typeof profile.displayName === 'string' &&
+        typeof profile.username === 'string' &&
+        profile.id !== user?.id
+      )
+      .map((profile) => ({
+        id: profile.id,
+        name: profile.displayName,
+        username: profile.username,
+        level: 'Lvl 1',
+        status: 'Registered'
+      }))
+  )
 
-  const [studyRooms, setStudyRooms] = useState(() => readStoredArray(STORAGE_KEYS.rooms, DEFAULT_ROOMS))
+  const [studyRooms, setStudyRooms] = useState(() =>
+    readStoredArray(STORAGE_KEYS.rooms, DEFAULT_ROOMS)
+      .filter((room) => !REMOVED_DEFAULT_ROOM_NAMES.has(room.name))
+  )
 
   const leaderboard = useMemo(() => {
     const friendDirectoryEntries = [
@@ -444,37 +445,28 @@ export default function Social({ user }) {
 
   const activeMemberCount = roomMembersForGrid.filter((member) => member.active).length
 
-  const filteredPeople = searchTerm.trim()
+  const normalizedQuery = normalizeSearchText(searchTerm.trim())
+  const filteredPeople = normalizedQuery
     ? people
-        .filter(person => {
-          const query = searchTerm.trim().toLowerCase().replace(/\s+/g, '')
-          const [firstName = '', ...restNames] = person.name.split(/\s+/)
-          const lastName = restNames.join(' ')
-          const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toLowerCase()
-          const firstNameCode = firstName.toLowerCase()
-          const lastNameCode = lastName.toLowerCase()
-          const username = person.username.toLowerCase()
+        .filter((person) => {
+          const normalizedName = normalizeSearchText(person.name)
+          const initials = person.name
+            .split(/\s+/)
+            .map((part) => part[0])
+            .join('')
+            .toLowerCase()
 
-          return (
-            firstNameCode.startsWith(query) ||
-            lastNameCode.startsWith(query) ||
-            initials.startsWith(query) ||
-            username.startsWith(query)
-          )
+          return normalizedName.includes(normalizedQuery)
+            || normalizeSearchText(person.username).includes(normalizedQuery)
+            || initials.startsWith(normalizedQuery)
         })
         .sort((a, b) => {
-          const query = searchTerm.trim().toLowerCase().replace(/\s+/g, '')
           const score = (person) => {
-            const [firstName = '', ...restNames] = person.name.split(/\s+/)
-            const lastName = restNames.join(' ')
-            const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toLowerCase()
-            let value = 0
-
-            if (firstName.toLowerCase().startsWith(query)) value += 3
-            if (lastName.toLowerCase().startsWith(query)) value += 2
-            if (initials.startsWith(query)) value += 4
-            if (person.username.toLowerCase().startsWith(query)) value += 1
-            return value
+            const normalizedName = normalizeSearchText(person.name)
+            if (normalizedName === normalizedQuery) return 3
+            if (normalizedName.startsWith(normalizedQuery)) return 2
+            if (normalizeSearchText(person.username).startsWith(normalizedQuery)) return 1
+            return 0
           }
 
           return score(b) - score(a) || a.name.localeCompare(b.name)
@@ -497,7 +489,7 @@ export default function Social({ user }) {
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by name or username"
+            placeholder="Search registered users by name or username"
           />
 
           {filteredPeople.length > 0 && (
@@ -521,7 +513,7 @@ export default function Social({ user }) {
           )}
 
           {searchTerm && filteredPeople.length === 0 && (
-            <p className="friend-empty">No matches yet. Try another name.</p>
+            <p className="friend-empty">No registered users match that name.</p>
           )}
         </div>
       </div>

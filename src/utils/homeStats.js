@@ -12,6 +12,13 @@ const DEFAULT_STATS = {
   lastActiveDate: null
 }
 
+export function getLocalDateISO(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // Returns the ISO date (YYYY-MM-DD) of the Monday that starts the current week.
 export function getWeekStartISO(date = new Date()) {
   const d = new Date(date)
@@ -19,7 +26,7 @@ export function getWeekStartISO(date = new Date()) {
   const diffToMonday = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + diffToMonday)
   d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  return getLocalDateISO(d)
 }
 
 // Loads this week's stats, resetting them if a new week has started (or if
@@ -132,13 +139,13 @@ export function awardXp(amount) {
 // weekly trend chart reflects real activity instead of fixed demo numbers.
 export const DAILY_HISTORY_STORAGE_KEY = 'posturable-daily-history'
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => getLocalDateISO()
 
 function getOldestTrackedDateISO() {
   const date = new Date()
   date.setDate(date.getDate() - 29)
   date.setHours(0, 0, 0, 0)
-  return date.toISOString().slice(0, 10)
+  return getLocalDateISO(date)
 }
 
 function pruneDailyHistory(history) {
@@ -183,15 +190,24 @@ export function addDailyActivity({ studyMinutes = 0, breaksTaken = 0 } = {}) {
   saveDailyHistory(history)
 }
 
-// Records a posture score sample for today, used to compute the day's average.
-export function addDailyPostureSample(score) {
+// Records a posture score and the detected posture reasons for today. Status
+// counts let the Stretches page recommend exercises based on actual deductions.
+export function addDailyPostureSample(score, postureStatuses = []) {
   const history = loadDailyHistory()
   const date = todayISO()
   const entry = history[date] || { studyMinutes: 0, breaksTaken: 0, postureSamples: [] }
+  const postureIssues = { ...(entry.postureIssues || {}) }
+
+  postureStatuses.forEach((status) => {
+    if (status && status !== 'Good posture') {
+      postureIssues[status] = (postureIssues[status] || 0) + 1
+    }
+  })
 
   history[date] = {
     ...entry,
-    postureSamples: [...(entry.postureSamples || []), score]
+    postureSamples: [...(entry.postureSamples || []), score],
+    postureIssues
   }
   saveDailyHistory(history)
 }
@@ -204,7 +220,7 @@ export function getLast7DaysSummary() {
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const dateKey = d.toISOString().slice(0, 10)
+    const dateKey = getLocalDateISO(d)
     const entry = history[dateKey]
     const postureSamples = entry?.postureSamples || []
     const postureAvg = postureSamples.length

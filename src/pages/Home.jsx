@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import '../styles/pages.css'
-import { POSTURE_SCORE_STORAGE_KEY } from './Study'
-import { loadHomeStats, loadLevelProgress, getLevelName } from '../utils/homeStats'
+import { POSTURE_SCORE_STORAGE_KEY, POSTURE_SCORE_DATE_STORAGE_KEY } from './Study'
+import { loadHomeStats, loadLevelProgress, getLevelName, getLocalDateISO } from '../utils/homeStats'
 
 export default function Home({ user, onOpenSettings }) {
-  const [hasPostureScore] = useState(() => window.localStorage.getItem(POSTURE_SCORE_STORAGE_KEY) !== null)
+  const [hasPostureScore] = useState(() =>
+    window.localStorage.getItem(POSTURE_SCORE_DATE_STORAGE_KEY) === getLocalDateISO()
+    && window.localStorage.getItem(POSTURE_SCORE_STORAGE_KEY) !== null
+  )
   const [postureScore] = useState(() => {
+    if (window.localStorage.getItem(POSTURE_SCORE_DATE_STORAGE_KEY) !== getLocalDateISO()) return 0
     const saved = Number(window.localStorage.getItem(POSTURE_SCORE_STORAGE_KEY))
     return Number.isFinite(saved) && saved > 0 ? saved : 0
   })
