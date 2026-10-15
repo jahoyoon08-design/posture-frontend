@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import Home from './pages/Home'
 import Study from './pages/Study'
@@ -22,8 +23,24 @@ const defaultUser = {
 
 const REGISTERED_USERS_STORAGE_KEY = 'posturable-users'
 
+const PAGE_PATHS = {
+  home: '/',
+  study: '/study',
+  stats: '/stats',
+  stretches: '/stretches',
+  social: '/social',
+  settings: '/settings'
+}
+
+const pageFromPath = (pathname) =>
+  Object.keys(PAGE_PATHS).find((page) => PAGE_PATHS[page] === pathname)
+
 function App() {
-  const [currentPage, setCurrentPage] = useState('home')
+  const location = useLocation()
+  const navigate = useNavigate()
+  // The URL is the source of truth for the current page so it survives a refresh.
+  const currentPage = pageFromPath(location.pathname)
+  const setCurrentPage = (page) => navigate(PAGE_PATHS[page])
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     try {
       return window.localStorage.getItem('posturable-auth') === 'true'
@@ -279,6 +296,10 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  if (!currentPage) {
+    return <Navigate to="/" replace />
   }
 
   return (
