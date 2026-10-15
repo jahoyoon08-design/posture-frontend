@@ -1,22 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import '../styles/pages.css'
 import { loadDailyHistory } from '../utils/homeStats'
 import { POSTURE_STATUS_DEDUCTIONS, analyzePosture, loadMediapipePose } from '../utils/posturePose'
 import { MdMenuBook, MdAccessTime, MdPause, MdPlayArrow } from 'react-icons/md'
+import { createFriend, deleteFriend, fetchFriends, fetchUsers } from '../utils/api'
 
 const STORAGE_KEYS = {
   rooms: 'posturable-social-study-rooms',
-  friends: 'posturable-social-friends',
-  joined: 'posturable-social-joined-rooms',
-  registeredUsers: 'posturable-users'
+  joined: 'posturable-social-joined-rooms'
 }
 
 const DEFAULT_ROOMS = []
 const REMOVED_DEFAULT_ROOM_NAMES = new Set(['Finals Prep Squad', 'Morning Study Club'])
 const REMOVED_DEFAULT_ROOM_IDS = new Set([1, 2])
-const REMOVED_DEFAULT_PERSON_IDS = new Set([1, 2, 3, 4, 5, 6, 7])
 
-const DEFAULT_FRIENDS = []
 const LEGACY_DEFAULT_FRIEND_IDS = [1, 2]
 
 const readStoredArray = (key, fallback) => {
@@ -56,29 +53,56 @@ export default function Social({ user }) {
     readStoredArray(STORAGE_KEYS.joined, []).filter((id) => !REMOVED_DEFAULT_ROOM_IDS.has(Number(id)))
   )
   const [searchTerm, setSearchTerm] = useState('')
-  const [friends, setFriends] = useState(() =>
-    readStoredArray(STORAGE_KEYS.friends, DEFAULT_FRIENDS)
-      .filter((id) => !REMOVED_DEFAULT_PERSON_IDS.has(Number(id)))
-  )
+  // Friendships from the backend (see fromApiFriend): friendshipId is for DELETE,
+  // friendId is the other user's id and is what we compare against /api/users.
+  const [friendships, setFriendships] = useState([])
+  const [people, setPeople] = useState([])
+  const [friendError, setFriendError] = useState('')
+  const [pendingFriendIds, setPendingFriendIds] = useState([])
+  const friends = friendships.map((friendship) => friendship.friendId)
+
+  const loadFriends = async () => {
+    if (!user?.id) return
+    setFriendships(await fetchFriends(user.id))
+  }
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.friends)
-    if (!raw) return
+    if (!user?.id) return
 
-    try {
-      const parsed = JSON.parse(raw)
-      const isLegacyDefault = Array.isArray(parsed)
-        && parsed.length === LEGACY_DEFAULT_FRIEND_IDS.length
-        && parsed.every((value) => LEGACY_DEFAULT_FRIEND_IDS.includes(Number(value)))
+    const loadSocialData = () => {
+      fetchUsers()
+        .then((users) => setPeople(
+          users
+            .filter((profile) => profile.id !== user.id)
+            .map((profile) => ({
+              id: profile.id,
+              name: profile.displayName,
+              username: profile.username,
+              level: `Lvl ${profile.level}`,
+              status: 'Registered'
+            }))
+        ))
+        .catch((error) => setFriendError(error.message))
 
-      if (isLegacyDefault) {
-        setFriends(DEFAULT_FRIENDS)
-        window.localStorage.setItem(STORAGE_KEYS.friends, JSON.stringify(DEFAULT_FRIENDS))
-      }
-    } catch {
-      // Ignore corrupted localStorage values and keep the empty default state.
+      fetchFriends(user.id)
+        .then(setFriendships)
+        .catch((error) => setFriendError(error.message))
     }
-  }, [])
+
+    // Friendships are mutual, so someone else may add us while this page is open.
+    // Reload when the tab regains focus instead of polling.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadSocialData()
+    }
+
+    loadSocialData()
+    window.addEventListener('focus', loadSocialData)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', loadSocialData)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [user?.id])
 
   const [showAllFriends, setShowAllFriends] = useState(false)
   const [showAllRooms, setShowAllRooms] = useState(false)
@@ -88,121 +112,31 @@ export default function Social({ user }) {
   const [roomPreviewModal, setRoomPreviewModal] = useState(null)
   const [roomName, setRoomName] = useState('')
 
-  const studyBuddies = [
-    {
-      id: 1,
-      initials: 'AC',
-      name: 'Alex Chen',
-      status: 'Online',
-      inStudyRoom: true,
-      streak: '12d',
-      posture: '88',
-      studyTime: '145m',
-      level: 'Lvl 4',
-      color: '#93c5fd'
-    },
-    {
-      id: 2,
-      initials: 'JS',
-      name: 'Jordan Smith',
-      status: 'Online',
-      inStudyRoom: false,
-      streak: '8d',
-      posture: '92',
-      studyTime: '98m',
-      level: 'Lvl 3',
-      color: '#86efac'
-    },
-    {
-      id: 3,
-      initials: 'SW',
-      name: 'Sam Williams',
-      status: 'Offline',
-      inStudyRoom: false,
-      streak: '15d',
-      posture: '85',
-      studyTime: '210m',
-      level: 'Lvl 5',
-      color: '#fed7aa'
-    },
-  ]
-
-  const [people] = useState(() =>
-    readStoredArray(STORAGE_KEYS.registeredUsers, [])
-      .filter((profile) =>
-        profile &&
-        typeof profile.id === 'string' &&
-        typeof profile.displayName === 'string' &&
-        typeof profile.username === 'string' &&
-        profile.id !== user?.id
-      )
-      .map((profile) => ({
-        id: profile.id,
-        name: profile.displayName,
-        username: profile.username,
-        level: 'Lvl 1',
-        status: 'Registered'
-      }))
-  )
-
   const [studyRooms, setStudyRooms] = useState(() =>
     readStoredArray(STORAGE_KEYS.rooms, DEFAULT_ROOMS)
       .filter((room) => !REMOVED_DEFAULT_ROOM_NAMES.has(room.name))
   )
 
-  const leaderboard = useMemo(() => {
-    const friendDirectoryEntries = [
-      ...studyBuddies.map((buddy) => ({
-        id: buddy.id,
-        initials: buddy.initials,
-        name: buddy.name,
-        time: buddy.studyTime,
-        level: buddy.level,
-        status: buddy.inStudyRoom ? 'Studying' : buddy.status
-      })),
-      ...people.map((person) => ({
-        id: person.id,
-        initials: getInitials(person.name),
-        name: person.name,
-        time: '0m',
-        level: person.level,
-        status: person.status
-      }))
-    ]
+  const currentFriends = friendships.map((friendship) => ({
+    id: friendship.friendId,
+    friendshipId: friendship.friendshipId,
+    name: friendship.displayName,
+    initials: getInitials(friendship.displayName),
+    color: '#cbd5e1',
+    meta: `Registered · Lvl ${friendship.level}`
+  }))
 
-    const friendBuddies = friendDirectoryEntries.filter((entry) => friends.includes(entry.id))
-
-    return friendBuddies.map((entry, index) => ({
+  const leaderboard = [...friendships]
+    .sort((a, b) => b.totalStudyTime - a.totalStudyTime || a.displayName.localeCompare(b.displayName))
+    .map((friendship, index) => ({
+      id: friendship.friendId,
       rank: index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`,
-      initials: entry.initials,
-      name: entry.name,
-      time: entry.time,
-      level: entry.level,
-      status: entry.status
-    }))
-  }, [friends, people, studyBuddies])
-
-  const friendDirectory = useMemo(() => {
-    const buddyEntries = studyBuddies.map((buddy) => ({
-      id: buddy.id,
-      name: buddy.name,
-      initials: buddy.initials,
-      color: buddy.color,
-      meta: `${buddy.inStudyRoom ? 'Studying' : buddy.status} · ${buddy.level}`
+      initials: getInitials(friendship.displayName),
+      name: friendship.displayName,
+      time: `${friendship.totalStudyTime}m`,
+      level: `Lvl ${friendship.level}`
     }))
 
-    const peopleEntries = people.map((person) => ({
-      id: person.id,
-      name: person.name,
-      initials: getInitials(person.name),
-      color: '#cbd5e1',
-      meta: `${person.status} · ${person.level}`
-    }))
-
-    return [...buddyEntries, ...peopleEntries]
-  }, [studyBuddies, people])
-
-  const currentFriends = friendDirectory.filter((friend) => friends.includes(friend.id))
   const displayedFriends = showAllFriends ? currentFriends : currentFriends.slice(0, 3)
   const canExpandFriends = currentFriends.length > 3
   const displayedRooms = showAllRooms ? studyRooms : studyRooms.slice(0, 2)
@@ -213,10 +147,6 @@ export default function Social({ user }) {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.rooms, JSON.stringify(studyRooms))
   }, [studyRooms])
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.friends, JSON.stringify(friends))
-  }, [friends])
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.joined, JSON.stringify(joinedRooms))
@@ -238,12 +168,33 @@ export default function Social({ user }) {
     setRoomPreviewModal(null)
   }
 
-  const addFriend = (friendId) => {
-    setFriends(prev => prev.includes(friendId) ? prev : [...prev, friendId])
+  const addFriend = async (friendId) => {
+    if (friends.includes(friendId) || pendingFriendIds.includes(friendId)) return
+    setFriendError('')
+    setPendingFriendIds((prev) => [...prev, friendId])
+    try {
+      await createFriend(user.id, friendId)
+      await loadFriends()
+    } catch (error) {
+      // 409 means they already added us (friendships are mutual) and our list is stale.
+      if (error.status === 409) {
+        await loadFriends().catch(() => {})
+      } else {
+        setFriendError(error.message)
+      }
+    } finally {
+      setPendingFriendIds((prev) => prev.filter((id) => id !== friendId))
+    }
   }
 
-  const removeFriend = (friendId) => {
-    setFriends(prev => prev.filter(id => id !== friendId))
+  const removeFriend = async (friendshipId) => {
+    setFriendError('')
+    try {
+      await deleteFriend(friendshipId)
+      await loadFriends()
+    } catch (error) {
+      setFriendError(error.message)
+    }
   }
 
   const handleCreateRoom = () => {
@@ -504,8 +455,9 @@ export default function Social({ user }) {
                     type="button"
                     className="friend-action"
                     onClick={() => addFriend(person.id)}
+                    disabled={pendingFriendIds.includes(person.id)}
                   >
-                    {friends.includes(person.id) ? 'Added' : 'Add'}
+                    {friends.includes(person.id) ? 'Added' : pendingFriendIds.includes(person.id) ? 'Adding…' : 'Add'}
                   </button>
                 </div>
               ))}
@@ -515,6 +467,8 @@ export default function Social({ user }) {
           {searchTerm && filteredPeople.length === 0 && (
             <p className="friend-empty">No registered users match that name.</p>
           )}
+
+          {friendError && <p className="auth-error">{friendError}</p>}
         </div>
       </div>
 
@@ -540,7 +494,7 @@ export default function Social({ user }) {
                   <button
                     type="button"
                     className="ghost-btn"
-                    onClick={() => removeFriend(friend.id)}
+                    onClick={() => removeFriend(friend.friendshipId)}
                   >
                     Delete
                   </button>
@@ -605,11 +559,11 @@ export default function Social({ user }) {
         <div className="section-header">
           <h3 className="section-title">Leaderboard</h3>
         </div>
-        <p className="leaderboard-subtitle">This week&apos;s study time</p>
+        <p className="leaderboard-subtitle">Total study time</p>
 
         <div className="leaderboard-list">
-          {displayedLeaderboard.map((entry, idx) => (
-            <div key={idx} className="leaderboard-entry">
+          {displayedLeaderboard.map((entry) => (
+            <div key={entry.id} className="leaderboard-entry">
               <div className="rank-medal">{entry.rank}</div>
               <div className="entry-avatar">{entry.initials}</div>
               <div className="entry-info">

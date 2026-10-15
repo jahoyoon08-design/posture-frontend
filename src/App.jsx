@@ -12,16 +12,17 @@ import stretchIcon from './assets/stretch-icon.png'
 import { MdHome, MdMenuBook, MdBarChart, MdFitnessCenter, MdPeople } from 'react-icons/md'
 import { POSTURE_SCORE_STORAGE_KEY, POSTURE_SCORE_DATE_STORAGE_KEY } from './pages/Study'
 import { resetHomeStats, resetLevelProgress, resetDailyHistory } from './utils/homeStats'
+import { loginUser, registerUser } from './utils/api'
 
-const defaultUser = {
-  displayName: 'Ava',
-  username: 'ava',
-  email: 'ava@posturable.app',
-  password: 'posturable',
-  avatar: ''
+const readSavedUser = () => {
+  try {
+    const savedUser = JSON.parse(window.localStorage.getItem('posturable-user'))
+    // Accounts saved before the backend existed have no numeric id and can't call the API.
+    return Number.isInteger(savedUser?.id) ? savedUser : null
+  } catch {
+    return null
+  }
 }
-
-const REGISTERED_USERS_STORAGE_KEY = 'posturable-users'
 
 const PAGE_PATHS = {
   home: '/',
@@ -41,22 +42,15 @@ function App() {
   // The URL is the source of truth for the current page so it survives a refresh.
   const currentPage = pageFromPath(location.pathname)
   const setCurrentPage = (page) => navigate(PAGE_PATHS[page])
+  const [user, setUser] = useState(readSavedUser)
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     try {
-      return window.localStorage.getItem('posturable-auth') === 'true'
+      return user !== null && window.localStorage.getItem('posturable-auth') === 'true'
     } catch {
       return false
     }
   })
   const [authMode, setAuthMode] = useState('login')
-  const [user, setUser] = useState(() => {
-    try {
-      const savedUser = window.localStorage.getItem('posturable-user')
-      return savedUser ? JSON.parse(savedUser) : defaultUser
-    } catch {
-      return defaultUser
-    }
-  })
   const [authForm, setAuthForm] = useState({
     name: '',
     email: '',
@@ -64,29 +58,12 @@ function App() {
     confirmPassword: ''
   })
   const [authError, setAuthError] = useState('')
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false)
 
   useEffect(() => {
     window.localStorage.setItem('posturable-user', JSON.stringify(user))
     window.localStorage.setItem('posturable-auth', String(isAuthenticated))
   }, [user, isAuthenticated])
-
-  useEffect(() => {
-    if (!user?.id) return
-
-    try {
-      const registeredUsers = JSON.parse(window.localStorage.getItem(REGISTERED_USERS_STORAGE_KEY) || '[]')
-      if (!Array.isArray(registeredUsers)) return
-
-      const updatedUsers = registeredUsers.map((registeredUser) =>
-        registeredUser.id === user.id
-          ? { ...registeredUser, displayName: user.displayName, username: user.username }
-          : registeredUser
-      )
-      window.localStorage.setItem(REGISTERED_USERS_STORAGE_KEY, JSON.stringify(updatedUsers))
-    } catch {
-      // Keep profile edits working if the local directory is unavailable.
-    }
-  }, [user])
 
   const handleAuthChange = (field, value) => {
     setAuthForm(prev => ({ ...prev, [field]: value }))
@@ -100,7 +77,7 @@ function App() {
     /[0-9]/.test(password) &&
     /[^a-zA-Z0-9]/.test(password)
 
-  const handleAuthSubmit = (event) => {
+  const handleAuthSubmit = async (event) => {
     event.preventDefault()
     setAuthError('')
 
@@ -134,25 +111,31 @@ function App() {
         setAuthError('Please enter a valid email address.')
         return
       }
-
-      const emailMatches = authForm.email.trim().toLowerCase() === (user.email || '').toLowerCase()
-      const passwordMatches = authForm.password === user.password
-
-      if (!emailMatches || !passwordMatches) {
-        setAuthError('Incorrect email or password.')
-        return
-      }
     }
 
-    const name = authMode === 'signup'
-      ? (authForm.name.trim() || 'Student')
-      : (user.displayName || 'Student')
-    const username = authMode === 'signup'
-      ? (authForm.name.trim().toLowerCase().replace(/\s+/g, '') || 'student')
-      : user.username
-    const registeredUserId = authMode === 'signup'
-      ? (window.crypto?.randomUUID?.() || `user-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-      : user.id
+    let authenticatedUser
+    setIsSubmittingAuth(true)
+    try {
+      if (authMode === 'signup') {
+        const name = authForm.name.trim()
+        authenticatedUser = await registerUser({
+          fullName: name,
+          displayName: name,
+          email: authForm.email.trim(),
+          password: authForm.password
+        })
+      } else {
+        authenticatedUser = await loginUser({
+          email: authForm.email.trim(),
+          password: authForm.password
+        })
+      }
+    } catch (error) {
+      setAuthError(error.message || 'Something went wrong. Please try again.')
+      return
+    } finally {
+      setIsSubmittingAuth(false)
+    }
 
     if (authMode === 'signup') {
       // Brand-new account: start with no logged posture score and all
@@ -160,29 +143,12 @@ function App() {
       // inheriting any previous data.
       window.localStorage.removeItem(POSTURE_SCORE_STORAGE_KEY)
       window.localStorage.removeItem(POSTURE_SCORE_DATE_STORAGE_KEY)
-      window.localStorage.setItem('posturable-social-friends', JSON.stringify([]))
       resetHomeStats()
       resetLevelProgress()
       resetDailyHistory()
-
-      try {
-        const storedUsers = JSON.parse(window.localStorage.getItem(REGISTERED_USERS_STORAGE_KEY) || '[]')
-        const registeredUsers = Array.isArray(storedUsers) ? storedUsers : []
-        registeredUsers.push({ id: registeredUserId, displayName: name, username })
-        window.localStorage.setItem(REGISTERED_USERS_STORAGE_KEY, JSON.stringify(registeredUsers))
-      } catch {
-        // Do not block account creation if the local directory cannot be saved.
-      }
     }
 
-    setUser(prev => ({
-      ...prev,
-      id: registeredUserId,
-      displayName: name,
-      username,
-      email: authForm.email.trim() || prev.email,
-      password: authForm.password || prev.password
-    }))
+    setUser(authenticatedUser)
     setIsAuthenticated(true)
     setCurrentPage('home')
   }
@@ -273,8 +239,8 @@ function App() {
               </label>
             )}
 
-            <button type="submit" className="primary-btn auth-submit">
-              {authMode === 'login' ? 'Log in' : 'Create account'}
+            <button type="submit" className="primary-btn auth-submit" disabled={isSubmittingAuth}>
+              {isSubmittingAuth ? 'Please wait…' : authMode === 'login' ? 'Log in' : 'Create account'}
             </button>
 
             {authError && <p className="auth-error">{authError}</p>}

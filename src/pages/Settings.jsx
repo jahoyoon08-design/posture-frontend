@@ -1,24 +1,20 @@
 import { useEffect, useState } from 'react'
 import '../styles/pages.css'
+import { toUsername, updateUser } from '../utils/api'
 
 export default function Settings({ user, onUpdateUser, onLogout }) {
   const [form, setForm] = useState({
-    displayName: user?.displayName || 'Ava',
-    username: user?.username || 'ava',
-    email: user?.email || 'ava@posturable.app',
-    password: '',
-    confirmPassword: '',
+    displayName: user?.displayName || '',
+    email: user?.email || '',
     avatar: user?.avatar || ''
   })
   const [status, setStatus] = useState('Personalize your profile and study vibe.')
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     setForm({
-      displayName: user?.displayName || 'Ava',
-      username: user?.username || 'ava',
-      email: user?.email || 'ava@posturable.app',
-      password: '',
-      confirmPassword: '',
+      displayName: user?.displayName || '',
+      email: user?.email || '',
       avatar: user?.avatar || ''
     })
   }, [user])
@@ -27,26 +23,36 @@ export default function Settings({ user, onUpdateUser, onLogout }) {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (event) => {
+  // The backend has no username column; it is always derived from the display name.
+  const username = toUsername(form.displayName)
+
+  const handleSubmit = async (event) => {
     event.preventDefault()
 
-    if (form.password && form.password !== form.confirmPassword) {
-      setStatus('Passwords do not match. Please try again.')
+    const displayName = form.displayName.trim() || user?.displayName
+    const email = form.email.trim() || user?.email
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus('Please enter a valid email address.')
       return
     }
 
-    const nextUser = {
-      ...user,
-      displayName: form.displayName.trim() || user?.displayName || 'Student',
-      username: form.username.trim() || user?.username || 'student',
-      email: form.email.trim() || user?.email || 'student@posturable.app',
-      avatar: form.avatar.trim() || user?.avatar || '',
-      password: form.password || user?.password || ''
+    setIsSaving(true)
+    try {
+      const savedUser = await updateUser(user.id, {
+        displayName,
+        email,
+        profilePictureUrl: form.avatar.trim() || undefined
+      })
+      onUpdateUser(savedUser)
+      setStatus('Profile updated. Your next session is ready.')
+    } catch (error) {
+      // The backend doesn't pre-check email uniqueness on update, so Postgres's error comes through.
+      setStatus(/duplicate key/i.test(error.message)
+        ? 'That email is already used by another account.'
+        : error.message || 'Could not save your profile. Please try again.')
+    } finally {
+      setIsSaving(false)
     }
-
-    onUpdateUser(nextUser)
-    window.localStorage.setItem('posturable-user', JSON.stringify(nextUser))
-    setStatus('Profile updated. Your next session is ready.')
   }
 
   return (
@@ -70,7 +76,7 @@ export default function Settings({ user, onUpdateUser, onLogout }) {
           </div>
           <div>
             <h2>{form.displayName || 'Your name'}</h2>
-            <p>@{form.username || 'username'}</p>
+            <p>@{username}</p>
           </div>
         </div>
 
@@ -86,11 +92,7 @@ export default function Settings({ user, onUpdateUser, onLogout }) {
 
           <label>
             Username
-            <input
-              type="text"
-              value={form.username}
-              onChange={(event) => handleChange('username', event.target.value)}
-            />
+            <input type="text" value={username} readOnly disabled />
           </label>
 
           <label>
@@ -112,29 +114,12 @@ export default function Settings({ user, onUpdateUser, onLogout }) {
             />
           </label>
 
-          <label>
-            New password
-            <input
-              type="password"
-              value={form.password}
-              placeholder="Leave blank to keep current"
-              onChange={(event) => handleChange('password', event.target.value)}
-            />
-          </label>
-
-          <label>
-            Confirm password
-            <input
-              type="password"
-              value={form.confirmPassword}
-              onChange={(event) => handleChange('confirmPassword', event.target.value)}
-            />
-          </label>
-
           <p className="settings-status">{status}</p>
 
           <div className="settings-actions">
-            <button type="submit" className="primary-btn">Save profile</button>
+            <button type="submit" className="primary-btn" disabled={isSaving}>
+              {isSaving ? 'Saving…' : 'Save profile'}
+            </button>
             <button type="button" className="ghost-btn logout-btn" onClick={onLogout}>Log out</button>
           </div>
         </form>
